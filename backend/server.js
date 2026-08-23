@@ -17,6 +17,7 @@ const cashTransactionRoutes = require("./routes/cashTransactionRoutes");
 const balanceRoutes = require("./routes/balanceRoutes");
 const dailyBalanceRoutes = require("./routes/dailyBalanceRoutes");
 const openingBalanceRoutes = require("./routes/openingBalanceRoutes");
+const returnRoutes = require("./routes/returnRoutes");
 
 const app = express();
 
@@ -42,6 +43,8 @@ app.use("/api/cash-transactions", cashTransactionRoutes);
 app.use("/api/balances", balanceRoutes);
 app.use("/api/daily-balances", dailyBalanceRoutes);
 app.use("/api/opening-balances", openingBalanceRoutes);
+app.use("/api/returns", returnRoutes);
+
 
 const PORT = process.env.PORT || 5000;
 connectDB()

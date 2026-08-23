@@ -2,12 +2,14 @@ const Delivery = require("../models/Delivery");
 const PurchaseReceipt = require("../models/PurchaseReceipt");
 const Payment = require("../models/Payment");
 const OpeningBalance = require("../models/OpeningBalance");
+const Return = require("../models/Return");
 
 /*
   Calculate outstanding amount for a shop.
 
   Opening shop receivable
   + Actual delivered value after opening date
+  - Sales returns after opening date
   - Payments received after opening date
   = Shop receivable
 */
@@ -39,6 +41,23 @@ const getShopOutstanding = async (shopId) => {
     });
   });
 
+  const salesReturns = await Return.find({
+    returnType: "from_shop",
+    shop: shopId,
+    returnDate: {
+      $gte: openingDate,
+    },
+  });
+
+  let totalSalesReturnValue = 0;
+
+  salesReturns.forEach((returnRecord) => {
+    returnRecord.items.forEach((item) => {
+      totalSalesReturnValue +=
+        item.quantity * (item.pricePerKg || 0);
+    });
+  });
+
   const payments = await Payment.find({
     partyType: "shop",
     shop: shopId,
@@ -55,11 +74,13 @@ const getShopOutstanding = async (shopId) => {
   const outstanding =
     openingAmount +
     totalDeliveredValue -
+    totalSalesReturnValue -
     totalPaymentsReceived;
 
   return {
     openingBalance: openingAmount,
     totalDeliveredValue,
+    totalSalesReturnValue,
     totalPaymentsReceived,
     outstanding,
   };
@@ -70,6 +91,7 @@ const getShopOutstanding = async (shopId) => {
 
   Opening distributor payable
   + Actual received value after opening date
+  - Purchase returns after opening date
   - Payments made after opening date
   = Distributor payable
 */
@@ -101,6 +123,23 @@ const getDistributorOutstanding = async (distributorId) => {
     });
   });
 
+  const purchaseReturns = await Return.find({
+    returnType: "to_distributor",
+    distributor: distributorId,
+    returnDate: {
+      $gte: openingDate,
+    },
+  });
+
+  let totalPurchaseReturnValue = 0;
+
+  purchaseReturns.forEach((returnRecord) => {
+    returnRecord.items.forEach((item) => {
+      totalPurchaseReturnValue +=
+        item.quantity * (item.pricePerKg || 0);
+    });
+  });
+
   const payments = await Payment.find({
     partyType: "distributor",
     distributor: distributorId,
@@ -117,11 +156,13 @@ const getDistributorOutstanding = async (distributorId) => {
   const outstanding =
     openingAmount +
     totalReceivedValue -
+    totalPurchaseReturnValue -
     totalPaymentsMade;
 
   return {
     openingBalance: openingAmount,
     totalReceivedValue,
+    totalPurchaseReturnValue,
     totalPaymentsMade,
     outstanding,
   };
