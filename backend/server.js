@@ -19,6 +19,7 @@ const dailyBalanceRoutes = require("./routes/dailyBalanceRoutes");
 const openingBalanceRoutes = require("./routes/openingBalanceRoutes");
 const returnRoutes = require("./routes/returnRoutes");
 const stockAdjustmentRoutes = require("./routes/stockAdjustmentRoutes");
+const deliveryRunRoutes = require("./routes/deliveryRunRoutes");
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/daily-balances", dailyBalanceRoutes);
 app.use("/api/opening-balances", openingBalanceRoutes);
 app.use("/api/returns", returnRoutes);
 app.use("/api/stock-adjustments",stockAdjustmentRoutes);
+app.use("/api/delivery-runs", deliveryRunRoutes);
 
 const PORT = process.env.PORT || 5000;
 connectDB()
