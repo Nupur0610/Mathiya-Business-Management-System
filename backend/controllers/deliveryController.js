@@ -214,7 +214,70 @@ const getDeliveries = async (req, res) => {
   }
 };
 
+const assignDeliveryToRun = async (req, res) => {
+  try {
+    const { deliveryId } = req.params;
+    const { deliveryRun } = req.body;
+
+    if (!deliveryRun) {
+      return res.status(400).json({
+        message: "Delivery run is required",
+      });
+    }
+
+    const delivery = await Delivery.findById(deliveryId);
+
+    if (!delivery) {
+      return res.status(404).json({
+        message: "Delivery not found",
+      });
+    }
+
+    if (delivery.deliveryRun) {
+      return res.status(400).json({
+        message: "Delivery is already assigned to a delivery run",
+      });
+    }
+
+    const run = await mongoose.model("DeliveryRun").findById(deliveryRun);
+
+    if (!run) {
+      return res.status(404).json({
+        message: "Delivery run not found",
+      });
+    }
+
+    if (["completed", "cancelled"].includes(run.status)) {
+      return res.status(400).json({
+        message: `Cannot assign delivery to a ${run.status} delivery run`,
+      });
+    }
+
+    delivery.deliveryRun = run._id;
+
+    await delivery.save();
+
+    const updatedDelivery = await Delivery.findById(delivery._id)
+      .populate("shopOrder")
+      .populate("shop")
+      .populate("items.product")
+      .populate("deliveryRun");
+
+    res.status(200).json({
+      message: "Delivery assigned to delivery run successfully",
+      delivery: updatedDelivery,
+    });
+  } catch (error) {
+    console.error("Assign delivery to run error:", error);
+
+    res.status(500).json({
+      message: "Failed to assign delivery to delivery run",
+      error: error.message,
+    });
+  }
+};
 module.exports = {
   createDelivery,
   getDeliveries,
+  assignDeliveryToRun,
 };
