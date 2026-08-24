@@ -5,6 +5,7 @@ const {
   getDeliveryRuns,
   getDeliveryRunById,
   updateDeliveryRunStatus,
+  getDeliveriesByRun,
 } = require("../controllers/deliveryRunController");
 
 const router = express.Router();
@@ -12,6 +13,8 @@ const router = express.Router();
 router.post("/", createDeliveryRun);
 
 router.get("/", getDeliveryRuns);
+
+router.get("/:id/deliveries", getDeliveriesByRun);
 
 router.get("/:id", getDeliveryRunById);
 

@@ -1,4 +1,5 @@
 const DeliveryRun = require("../models/DeliveryRun");
+const Delivery = require("../models/Delivery");
 
 // Create delivery run
 const createDeliveryRun = async (req, res) => {
@@ -141,9 +142,47 @@ const updateDeliveryRunStatus = async (req, res) => {
     }
   };
 
+  // Get all deliveries assigned to a delivery run
+const getDeliveriesByRun = async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Check that the delivery run exists
+      const deliveryRun = await DeliveryRun.findById(id);
+
+      if (!deliveryRun) {
+        return res.status(404).json({
+          message: "Delivery run not found.",
+        });
+      }
+
+      const deliveries = await Delivery.find({
+        deliveryRun: id,
+      })
+        .populate("shopOrder")
+        .populate("shop")
+        .populate("items.product")
+        .populate("deliveryRun")
+        .sort({ deliveredAt: 1 });
+
+      res.status(200).json({
+        deliveryRun,
+        deliveries,
+      });
+    } catch (error) {
+      console.error("Get deliveries by run error:", error);
+
+      res.status(500).json({
+        message: "Failed to fetch deliveries for delivery run.",
+        error: error.message,
+      });
+    }
+  };
+
 module.exports = {
   createDeliveryRun,
   getDeliveryRuns,
   getDeliveryRunById,
   updateDeliveryRunStatus,
+  getDeliveriesByRun,
 };
