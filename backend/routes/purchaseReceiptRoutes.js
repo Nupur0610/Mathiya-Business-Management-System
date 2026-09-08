@@ -8,6 +8,7 @@ const {
 const router = express.Router();
 
 router.get("/", getPurchaseReceipts);
+
 router.post("/", createPurchaseReceipt);
 
 module.exports = router;

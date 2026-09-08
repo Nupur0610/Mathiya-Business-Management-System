@@ -1,23 +1,58 @@
 const OpeningBalance = require("../models/OpeningBalance");
 const Payment = require("../models/Payment");
 const CashTransaction = require("../models/CashTransaction");
+const DailyBalance = require("../models/DailyBalance");
 
-// Calculate current expected cash or GPay balance
+const getCurrentDateRange = () => {
+  const now = new Date();
+
+  const indiaDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+  }).format(now);
+
+  const [year, month, day] = indiaDate.split("-").map(Number);
+
+  const start = new Date(
+    Date.UTC(year, month - 1, day) - 5.5 * 60 * 60 * 1000
+  );
+
+  return { start };
+};
+
 const getExpectedBalance = async (type) => {
-  // Find the latest opening balance for this type
-  const openingBalance = await OpeningBalance.findOne({
-    type,
-  }).sort({
-    asOfDate: -1,
-    createdAt: -1,
-  });
+  const { start: todayStart } = getCurrentDateRange();
 
-  const openingAmount = openingBalance?.amount || 0;
+  const latestDailyBalance = await DailyBalance.findOne({
+    date: { $lt: todayStart },
+    ...(type === "cash"
+      ? { actualCash: { $ne: null } }
+      : { actualGPay: { $ne: null } }),
+  }).sort({ date: -1 });
 
-  // Only count transactions after the opening balance date
-  const transactionDate = openingBalance?.asOfDate || new Date(0);
+  let openingAmount;
+  let transactionDate;
 
-  // Business payments
+  if (latestDailyBalance) {
+    openingAmount =
+      type === "cash"
+        ? latestDailyBalance.actualCash ?? latestDailyBalance.openingCash
+        : latestDailyBalance.actualGPay ?? latestDailyBalance.openingGPay;
+
+    transactionDate = new Date(
+      latestDailyBalance.date.getTime() + 24 * 60 * 60 * 1000
+    );
+  } else {
+    const openingBalance = await OpeningBalance.findOne({
+      type,
+    }).sort({
+      asOfDate: -1,
+      createdAt: -1,
+    });
+
+    openingAmount = openingBalance?.amount || 0;
+    transactionDate = openingBalance?.asOfDate || new Date(0);
+  }
+
   const payments = await Payment.find({
     paymentMethod: type,
     paymentDate: {
@@ -38,7 +73,6 @@ const getExpectedBalance = async (type) => {
     }
   });
 
-  // Personal transactions
   const personalTransactions = await CashTransaction.find({
     paymentMethod: type,
     transactionDate: {
@@ -74,7 +108,7 @@ const getExpectedBalance = async (type) => {
     personalContributions,
     personalWithdrawals,
     expectedBalance,
-    openingBalanceDate: openingBalance?.asOfDate || null,
+    openingBalanceDate: latestDailyBalance?.date || null,
   };
 };
 

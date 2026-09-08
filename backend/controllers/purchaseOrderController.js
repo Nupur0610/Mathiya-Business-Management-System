@@ -30,6 +30,8 @@ const createPurchaseOrder = async (req, res) => {
 
     res.status(201).json(populatedOrder);
   } catch (error) {
+    console.error("Create purchase order error:", error);
+
     res.status(500).json({
       message: "Failed to create purchase order",
       error: error.message,
@@ -46,6 +48,8 @@ const getPurchaseOrders = async (req, res) => {
 
     res.status(200).json(orders);
   } catch (error) {
+    console.error("Get purchase orders error:", error);
+
     res.status(500).json({
       message: "Failed to fetch purchase orders",
       error: error.message,

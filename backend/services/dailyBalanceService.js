@@ -3,24 +3,30 @@ const OpeningBalance = require("../models/OpeningBalance");
 const Payment = require("../models/Payment");
 const CashTransaction = require("../models/CashTransaction");
 
-// Get start and end of a particular day
 const getDayRange = (date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
+  const dateString =
+    typeof date === "string"
+      ? date.slice(0, 10)
+      : new Date(date).toISOString().slice(0, 10);
 
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  const start = new Date(Date.UTC(year, month - 1, day) - 5.5 * 60 * 60 * 1000);
+  const end = new Date(
+    Date.UTC(year, month - 1, day + 1) - 5.5 * 60 * 60 * 1000 - 1
+  );
 
   return { start, end };
 };
 
-// Get the opening balance for a day
 const getOpeningBalanceForDay = async (type, date) => {
   const { start } = getDayRange(date);
 
-  // First look for previous daily balance
   const previousDay = await DailyBalance.findOne({
     date: { $lt: start },
+    ...(type === "cash"
+      ? { actualCash: { $ne: null } }
+      : { actualGPay: { $ne: null } }),
   }).sort({ date: -1 });
 
   if (previousDay) {
@@ -29,8 +35,6 @@ const getOpeningBalanceForDay = async (type, date) => {
       : previousDay.actualGPay ?? previousDay.openingGPay;
   }
 
-  // If there is no previous daily balance,
-  // use the initial opening balance.
   const openingBalance = await OpeningBalance.findOne({
     type,
     asOfDate: { $lte: start },
@@ -42,13 +46,11 @@ const getOpeningBalanceForDay = async (type, date) => {
   return openingBalance?.amount || 0;
 };
 
-// Calculate expected balance for one day
 const calculateDailyExpectedBalance = async (type, date) => {
   const { start, end } = getDayRange(date);
 
   const openingAmount = await getOpeningBalanceForDay(type, date);
 
-  // Business payments made/received during the day
   const payments = await Payment.find({
     paymentMethod: type,
     paymentDate: {
@@ -70,7 +72,6 @@ const calculateDailyExpectedBalance = async (type, date) => {
     }
   });
 
-  // Personal cash/GPay transactions during the day
   const personalTransactions = await CashTransaction.find({
     paymentMethod: type,
     transactionDate: {
@@ -109,7 +110,6 @@ const calculateDailyExpectedBalance = async (type, date) => {
   };
 };
 
-// Create or update daily balance
 const createDailyBalance = async ({
   date,
   actualCash,
@@ -131,7 +131,7 @@ const createDailyBalance = async ({
       ? actualGPay - gpay.expectedBalance
       : 0;
 
-  const dailyBalance = await DailyBalance.findOneAndUpdate(
+  return await DailyBalance.findOneAndUpdate(
     { date: start },
     {
       date: start,
@@ -151,8 +151,6 @@ const createDailyBalance = async ({
       runValidators: true,
     }
   );
-
-  return dailyBalance;
 };
 
 module.exports = {

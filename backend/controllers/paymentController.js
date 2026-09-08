@@ -19,7 +19,8 @@ const createPayment = async (req, res) => {
     // Basic validation
     if (!partyType || !amount || !paymentMethod) {
       return res.status(400).json({
-        message: "partyType, amount and paymentMethod are required.",
+        message:
+          "partyType, amount and paymentMethod are required.",
       });
     }
 
@@ -44,11 +45,13 @@ const createPayment = async (req, res) => {
     if (partyType === "distributor") {
       if (!distributor) {
         return res.status(400).json({
-          message: "Distributor is required for a distributor payment.",
+          message:
+            "Distributor is required for a distributor payment.",
         });
       }
 
-      const existingDistributor = await Distributor.findById(distributor);
+      const existingDistributor =
+        await Distributor.findById(distributor);
 
       if (!existingDistributor) {
         return res.status(404).json({
@@ -61,7 +64,10 @@ const createPayment = async (req, res) => {
     const payment = await Payment.create({
       partyType,
       shop: partyType === "shop" ? shop : undefined,
-      distributor: partyType === "distributor" ? distributor : undefined,
+      distributor:
+        partyType === "distributor"
+          ? distributor
+          : undefined,
       amount,
       paymentMethod,
       paymentDate,
@@ -69,9 +75,10 @@ const createPayment = async (req, res) => {
       notes,
     });
 
-    const populatedPayment = await Payment.findById(payment._id)
-      .populate("shop")
-      .populate("distributor");
+    const populatedPayment =
+      await Payment.findById(payment._id)
+        .populate("shop")
+        .populate("distributor");
 
     res.status(201).json(populatedPayment);
   } catch (error) {
@@ -84,6 +91,26 @@ const createPayment = async (req, res) => {
   }
 };
 
+// Get all payments
+const getPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find()
+      .populate("shop")
+      .populate("distributor")
+      .sort({ paymentDate: -1 });
+
+    res.status(200).json(payments);
+  } catch (error) {
+    console.error("Get payments error:", error);
+
+    res.status(500).json({
+      message: "Failed to fetch payments.",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createPayment,
+  getPayments,
 };

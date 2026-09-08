@@ -4,6 +4,8 @@ const Return = require("../models/Return");
 const Product = require("../models/Product");
 const Shop = require("../models/Shop");
 const Distributor = require("../models/Distributor");
+const Delivery = require("../models/Delivery");
+const PurchaseReceipt = require("../models/PurchaseReceipt");
 
 const { createStockTransaction } = require("../services/stockService");
 
@@ -22,7 +24,10 @@ const createReturn = async (req, res) => {
       notes,
     } = req.body;
 
+    // -----------------------------
     // Basic validation
+    // -----------------------------
+
     if (!returnType) {
       return res.status(400).json({
         message: "returnType is required.",
@@ -56,7 +61,10 @@ const createReturn = async (req, res) => {
 
     session.startTransaction();
 
+    // -----------------------------
     // Validate shop
+    // -----------------------------
+
     if (returnType === "from_shop") {
       const existingShop = await Shop.findById(shop).session(session);
 
@@ -65,7 +73,10 @@ const createReturn = async (req, res) => {
       }
     }
 
+    // -----------------------------
     // Validate distributor
+    // -----------------------------
+
     if (returnType === "to_distributor") {
       const existingDistributor = await Distributor.findById(
         distributor
@@ -76,10 +87,15 @@ const createReturn = async (req, res) => {
       }
     }
 
-    // Validate products and quantities
+    // -----------------------------
+    // Validate each return item
+    // -----------------------------
+
     for (const item of items) {
       if (!item.product) {
-        throw new Error("Product is required for every return item.");
+        throw new Error(
+          "Product is required for every return item."
+        );
       }
 
       if (item.quantity === undefined || item.quantity <= 0) {
@@ -88,6 +104,17 @@ const createReturn = async (req, res) => {
         );
       }
 
+      if (
+        item.pricePerKg === undefined ||
+        item.pricePerKg === null ||
+        item.pricePerKg < 0
+      ) {
+        throw new Error(
+          "Price per kg is required for every return item."
+        );
+      }
+
+      // Make sure product exists
       const existingProduct = await Product.findById(
         item.product
       ).session(session);
@@ -97,9 +124,118 @@ const createReturn = async (req, res) => {
           `Product ${item.product} not found.`
         );
       }
+
+      // -----------------------------
+      // SALES RETURN
+      // -----------------------------
+
+      if (returnType === "from_shop") {
+        // Find all deliveries made to this shop
+        const deliveries = await Delivery.find({
+          shop,
+        }).session(session);
+
+        let totalDelivered = 0;
+
+        for (const delivery of deliveries) {
+          for (const deliveredItem of delivery.items) {
+            if (
+              deliveredItem.product.toString() ===
+              item.product.toString()
+            ) {
+              totalDelivered += deliveredItem.quantityDelivered;
+            }
+          }
+        }
+
+        // Find previous sales returns for this shop/product
+        const previousReturns = await Return.find({
+          returnType: "from_shop",
+          shop,
+        }).session(session);
+
+        let totalPreviouslyReturned = 0;
+
+        for (const previousReturn of previousReturns) {
+          for (const returnedItem of previousReturn.items) {
+            if (
+              returnedItem.product.toString() ===
+              item.product.toString()
+            ) {
+              totalPreviouslyReturned += returnedItem.quantity;
+            }
+          }
+        }
+
+        const returnableQuantity =
+          totalDelivered - totalPreviouslyReturned;
+
+        if (item.quantity > returnableQuantity) {
+          throw new Error(
+            `Cannot return ${item.quantity} kg of product ${item.product}. ` +
+            `Only ${returnableQuantity} kg is available for return.`
+          );
+        }
+      }
+
+      // -----------------------------
+      // PURCHASE RETURN
+      // -----------------------------
+
+      if (returnType === "to_distributor") {
+        // Find all purchase receipts from this distributor
+        const receipts = await PurchaseReceipt.find({
+          distributor,
+        }).session(session);
+
+        let totalReceived = 0;
+
+        for (const receipt of receipts) {
+          for (const receivedItem of receipt.items) {
+            if (
+              receivedItem.product.toString() ===
+              item.product.toString()
+            ) {
+              totalReceived += receivedItem.quantityReceived;
+            }
+          }
+        }
+
+        // Find previous purchase returns for this distributor/product
+        const previousReturns = await Return.find({
+          returnType: "to_distributor",
+          distributor,
+        }).session(session);
+
+        let totalPreviouslyReturned = 0;
+
+        for (const previousReturn of previousReturns) {
+          for (const returnedItem of previousReturn.items) {
+            if (
+              returnedItem.product.toString() ===
+              item.product.toString()
+            ) {
+              totalPreviouslyReturned += returnedItem.quantity;
+            }
+          }
+        }
+
+        const returnableQuantity =
+          totalReceived - totalPreviouslyReturned;
+
+        if (item.quantity > returnableQuantity) {
+          throw new Error(
+            `Cannot return ${item.quantity} kg of product ${item.product}. ` +
+            `Only ${returnableQuantity} kg is available for return.`
+          );
+        }
+      }
     }
 
+    // -----------------------------
     // Create return
+    // -----------------------------
+
     const returnResult = await Return.create(
       [
         {
@@ -120,7 +256,10 @@ const createReturn = async (req, res) => {
 
     const createdReturn = returnResult[0];
 
+    // -----------------------------
     // Create stock transactions
+    // -----------------------------
+
     for (const item of createdReturn.items) {
       await createStockTransaction({
         product: item.product,
@@ -137,8 +276,13 @@ const createReturn = async (req, res) => {
       });
     }
 
+    // -----------------------------
+    // Commit transaction
+    // -----------------------------
+
     await session.commitTransaction();
 
+    // Populate result after transaction completes
     const populatedReturn = await Return.findById(
       createdReturn._id
     )
