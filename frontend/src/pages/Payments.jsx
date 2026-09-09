@@ -39,7 +39,22 @@ function Payments() {
   const fetchPayments = async () => {
     try {
       const response = await api.get("/payments");
-      setPayments(response.data);
+
+      const sortedPayments = [...response.data].sort((a, b) => {
+        const dateA = new Date(a.paymentDate || a.createdAt);
+        const dateB = new Date(b.paymentDate || b.createdAt);
+
+        if (dateB - dateA !== 0) {
+          return dateB - dateA;
+        }
+
+        return (
+          new Date(b.createdAt || 0) -
+          new Date(a.createdAt || 0)
+        );
+      });
+
+      setPayments(sortedPayments);
     } catch (err) {
       console.error("Error fetching payments:", err);
 

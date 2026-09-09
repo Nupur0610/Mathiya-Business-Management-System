@@ -59,9 +59,24 @@ function Shops() {
   }, []);
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    if (name === "phone") {
+      const digitsOnly = value.replace(/\D/g, "");
+
+      if (digitsOnly.length <= 10) {
+        setFormData({
+          ...formData,
+          phone: digitsOnly,
+        });
+      }
+
+      return;
+    }
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
   };
 
@@ -74,10 +89,14 @@ function Shops() {
     if (
       !formData.name ||
       !formData.ownerName ||
-      !formData.phone ||
-      !formData.address
+      !formData.phone
     ) {
       setError("Please fill in all fields.");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(formData.phone)) {
+      setError("Phone number must be exactly 10 digits.");
       return;
     }
 
@@ -176,6 +195,7 @@ function Shops() {
                   <label className="form-label">
                     Shop Name
                   </label>
+
                   <input
                     type="text"
                     name="name"
@@ -191,6 +211,7 @@ function Shops() {
                   <label className="form-label">
                     Owner Name
                   </label>
+
                   <input
                     type="text"
                     name="ownerName"
@@ -206,21 +227,30 @@ function Shops() {
                   <label className="form-label">
                     Phone
                   </label>
+
                   <input
-                    type="text"
+                    type="tel"
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
                     className="form-control"
-                    placeholder="Enter phone number"
+                    placeholder="Enter 10-digit phone number"
+                    maxLength="10"
+                    inputMode="numeric"
+                    pattern="[0-9]{10}"
                     required
                   />
+
+                  <small className="text-muted">
+                    Enter exactly 10 digits.
+                  </small>
                 </div>
 
                 <div className="col-md-6 mb-3">
                   <label className="form-label">
                     Address
                   </label>
+
                   <input
                     type="text"
                     name="address"
@@ -228,7 +258,6 @@ function Shops() {
                     onChange={handleChange}
                     className="form-control"
                     placeholder="Enter address"
-                    required
                   />
                 </div>
               </div>
