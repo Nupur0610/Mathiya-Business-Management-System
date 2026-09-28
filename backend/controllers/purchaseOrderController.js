@@ -1,8 +1,15 @@
+
 const PurchaseOrder = require("../models/PurchaseOrder");
+const PurchasePrice = require("../models/PurchasePrice");
 
 const createPurchaseOrder = async (req, res) => {
   try {
-    const { distributor, items, orderDate, notes } = req.body;
+    const {
+      distributor,
+      items,
+      orderDate,
+      notes,
+    } = req.body;
 
     if (!distributor) {
       return res.status(400).json({
@@ -23,14 +30,37 @@ const createPurchaseOrder = async (req, res) => {
       notes,
     });
 
-    const populatedOrder = await purchaseOrder.populate([
-      { path: "distributor" },
-      { path: "items.product" },
-    ]);
+    for (const item of items) {
+      await PurchasePrice.findOneAndUpdate(
+        {
+          distributor,
+          product: item.product,
+        },
+        {
+          distributor,
+          product: item.product,
+          pricePerKg: Number(item.pricePerKg),
+        },
+        {
+          upsert: true,
+          new: true,
+          runValidators: true,
+        }
+      );
+    }
+
+    const populatedOrder =
+      await purchaseOrder.populate([
+        { path: "distributor" },
+        { path: "items.product" },
+      ]);
 
     res.status(201).json(populatedOrder);
   } catch (error) {
-    console.error("Create purchase order error:", error);
+    console.error(
+      "Create purchase order error:",
+      error
+    );
 
     res.status(500).json({
       message: "Failed to create purchase order",
@@ -48,7 +78,10 @@ const getPurchaseOrders = async (req, res) => {
 
     res.status(200).json(orders);
   } catch (error) {
-    console.error("Get purchase orders error:", error);
+    console.error(
+      "Get purchase orders error:",
+      error
+    );
 
     res.status(500).json({
       message: "Failed to fetch purchase orders",
@@ -61,3 +94,4 @@ module.exports = {
   createPurchaseOrder,
   getPurchaseOrders,
 };
+

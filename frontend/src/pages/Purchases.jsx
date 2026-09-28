@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import axios from "axios";
 
@@ -71,14 +72,88 @@ function Purchases() {
   }, []);
 
   // ==============================
+  // FETCH PURCHASE PRICE
+  // ==============================
+
+  const fetchPurchasePrice = async (
+    distributorId,
+    productId
+  ) => {
+    if (!distributorId || !productId) {
+      setFormData((prev) => ({
+        ...prev,
+        pricePerKg: "",
+      }));
+
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/purchase-prices/${distributorId}/${productId}`
+      );
+
+      setFormData((prev) => ({
+        ...prev,
+        pricePerKg: response.data.pricePerKg,
+      }));
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setFormData((prev) => ({
+          ...prev,
+          pricePerKg: "",
+        }));
+      } else {
+        console.error(
+          "Error fetching purchase price:",
+          err
+        );
+
+        setError(
+          err.response?.data?.message ||
+            "Failed to fetch purchase price."
+        );
+      }
+    }
+  };
+
+  // ==============================
   // CREATE PURCHASE ORDER
   // ==============================
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleChange = async (e) => {
+    const { name, value } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    if (name === "distributor") {
+      setFormData((prev) => ({
+        ...prev,
+        distributor: value,
+        pricePerKg: "",
+      }));
+
+      await fetchPurchasePrice(
+        value,
+        formData.product
+      );
+    }
+
+    if (name === "product") {
+      setFormData((prev) => ({
+        ...prev,
+        product: value,
+        pricePerKg: "",
+      }));
+
+      await fetchPurchasePrice(
+        formData.distributor,
+        value
+      );
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -116,7 +191,10 @@ function Purchases() {
 
       await fetchData();
     } catch (err) {
-      console.error("Create purchase order error:", err);
+      console.error(
+        "Create purchase order error:",
+        err
+      );
 
       setError(
         err.response?.data?.message ||
@@ -452,6 +530,12 @@ function Purchases() {
                     onChange={handleChange}
                     required
                   />
+
+                  {formData.pricePerKg && (
+                    <small className="text-muted">
+                      Auto-filled price. You can edit it if needed.
+                    </small>
+                  )}
 
                 </div>
 
@@ -1056,3 +1140,4 @@ function Purchases() {
 }
 
 export default Purchases;
+

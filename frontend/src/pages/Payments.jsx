@@ -15,7 +15,8 @@ function Payments() {
   const [formLoading, setFormLoading] = useState(false);
   const [outstandingLoading, setOutstandingLoading] = useState(false);
 
-  const [showForm, setShowForm] = useState(false);
+  const [showShopForm, setShowShopForm] = useState(false);
+  const [showDistributorForm, setShowDistributorForm] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -75,7 +76,6 @@ function Payments() {
       setShops(response.data);
     } catch (err) {
       console.error("Error fetching shops:", err);
-
       setError("Failed to load shops.");
     }
   };
@@ -90,7 +90,6 @@ function Payments() {
       setDistributors(response.data);
     } catch (err) {
       console.error("Error fetching distributors:", err);
-
       setError("Failed to load distributors.");
     }
   };
@@ -158,6 +157,52 @@ function Payments() {
   }, []);
 
   // ==============================
+  // OPEN SHOP FORM
+  // ==============================
+
+  const openShopForm = () => {
+    setError("");
+    setSuccess("");
+    setOutstanding(null);
+
+    setFormData({
+      partyType: "shop",
+      party: "",
+      amount: "",
+      paymentMethod: "cash",
+      paymentDate: getToday(),
+      reference: "",
+      notes: "",
+    });
+
+    setShowDistributorForm(false);
+    setShowShopForm(true);
+  };
+
+  // ==============================
+  // OPEN DISTRIBUTOR FORM
+  // ==============================
+
+  const openDistributorForm = () => {
+    setError("");
+    setSuccess("");
+    setOutstanding(null);
+
+    setFormData({
+      partyType: "distributor",
+      party: "",
+      amount: "",
+      paymentMethod: "cash",
+      paymentDate: getToday(),
+      reference: "",
+      notes: "",
+    });
+
+    setShowShopForm(false);
+    setShowDistributorForm(true);
+  };
+
+  // ==============================
   // HANDLE FORM CHANGE
   // ==============================
 
@@ -172,22 +217,6 @@ function Payments() {
     if (name === "party") {
       fetchOutstanding(formData.partyType, value);
     }
-  };
-
-  // ==============================
-  // HANDLE PARTY TYPE CHANGE
-  // ==============================
-
-  const handlePartyTypeChange = (e) => {
-    const value = e.target.value;
-
-    setFormData((previous) => ({
-      ...previous,
-      partyType: value,
-      party: "",
-    }));
-
-    setOutstanding(null);
   };
 
   // ==============================
@@ -206,7 +235,8 @@ function Payments() {
     });
 
     setOutstanding(null);
-    setShowForm(false);
+    setShowShopForm(false);
+    setShowDistributorForm(false);
     setError("");
   };
 
@@ -261,18 +291,19 @@ function Payments() {
 
       await api.post("/payments", paymentData);
 
-      setSuccess("Payment recorded successfully!");
+      setSuccess(
+        formData.partyType === "shop"
+          ? "Shop payment recorded successfully!"
+          : "Distributor payment recorded successfully!"
+      );
 
-      // Refresh payment history
       await fetchPayments();
 
-      // Refresh outstanding
       await fetchOutstanding(
         formData.partyType,
         formData.party
       );
 
-      // Clear payment-specific fields
       setFormData((previous) => ({
         ...previous,
         amount: "",
@@ -309,7 +340,15 @@ function Payments() {
   // TOTALS
   // ==============================
 
-  const cashTotal = payments
+  const shopPayments = payments.filter(
+    (payment) => payment.partyType === "shop"
+  );
+
+  const distributorPayments = payments.filter(
+    (payment) => payment.partyType === "distributor"
+  );
+
+  const shopCashTotal = shopPayments
     .filter(
       (payment) => payment.paymentMethod === "cash"
     )
@@ -319,7 +358,7 @@ function Payments() {
       0
     );
 
-  const gpayTotal = payments
+  const shopGpayTotal = shopPayments
     .filter(
       (payment) => payment.paymentMethod === "gpay"
     )
@@ -329,7 +368,41 @@ function Payments() {
       0
     );
 
-  const grandTotal = cashTotal + gpayTotal;
+  const distributorCashTotal = distributorPayments
+    .filter(
+      (payment) => payment.paymentMethod === "cash"
+    )
+    .reduce(
+      (total, payment) =>
+        total + Number(payment.amount || 0),
+      0
+    );
+
+  const distributorGpayTotal = distributorPayments
+    .filter(
+      (payment) => payment.paymentMethod === "gpay"
+    )
+    .reduce(
+      (total, payment) =>
+        total + Number(payment.amount || 0),
+      0
+    );
+
+  const shopGrandTotal =
+    shopCashTotal + shopGpayTotal;
+
+  const distributorGrandTotal =
+    distributorCashTotal +
+    distributorGpayTotal;
+
+  const cashTotal =
+    shopCashTotal + distributorCashTotal;
+
+  const gpayTotal =
+    shopGpayTotal + distributorGpayTotal;
+
+  const grandTotal =
+    cashTotal + gpayTotal;
 
   // ==============================
   // PARTY NAME
@@ -351,15 +424,6 @@ function Payments() {
   };
 
   // ==============================
-  // PARTY OPTIONS
-  // ==============================
-
-  const partyOptions =
-    formData.partyType === "shop"
-      ? shops
-      : distributors;
-
-  // ==============================
   // OUTSTANDING AMOUNT
   // ==============================
 
@@ -372,17 +436,412 @@ function Payments() {
   };
 
   // ==============================
+  // PAYMENT FORM
+  // ==============================
+
+  const renderPaymentForm = () => {
+    const isShop = formData.partyType === "shop";
+
+    const partyOptions = isShop
+      ? shops
+      : distributors;
+
+    return (
+      <div className="card shadow-sm mb-4">
+
+        <div className="card-body">
+
+          <div className="d-flex justify-content-between align-items-center mb-4">
+
+            <h5 className="mb-0">
+              {isShop
+                ? "Record Shop Payment"
+                : "Record Distributor Payment"}
+            </h5>
+
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={resetForm}
+              disabled={formLoading}
+            >
+              Cancel
+            </button>
+
+          </div>
+
+          <form onSubmit={handleSubmit}>
+
+            <div className="row">
+
+              {/* PARTY */}
+
+              <div className="col-md-4 mb-3">
+
+                <label className="form-label">
+                  {isShop
+                    ? "Shop"
+                    : "Distributor"}{" "}
+                  <span className="text-danger">
+                    *
+                  </span>
+                </label>
+
+                <select
+                  name="party"
+                  value={formData.party}
+                  onChange={handleChange}
+                  className="form-select"
+                  required
+                >
+
+                  <option value="">
+                    Select{" "}
+                    {isShop
+                      ? "Shop"
+                      : "Distributor"}
+                  </option>
+
+                  {partyOptions.map((party) => (
+                    <option
+                      key={party._id}
+                      value={party._id}
+                    >
+                      {party.name}
+                    </option>
+                  ))}
+
+                </select>
+
+              </div>
+
+              {/* AMOUNT */}
+
+              <div className="col-md-4 mb-3">
+
+                <label className="form-label">
+                  Amount (₹){" "}
+                  <span className="text-danger">
+                    *
+                  </span>
+                </label>
+
+                <input
+                  type="number"
+                  name="amount"
+                  value={formData.amount}
+                  onChange={handleChange}
+                  className="form-control"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="Enter amount"
+                  required
+                />
+
+              </div>
+
+              {/* PAYMENT METHOD */}
+
+              <div className="col-md-4 mb-3">
+
+                <label className="form-label">
+                  Payment Method{" "}
+                  <span className="text-danger">
+                    *
+                  </span>
+                </label>
+
+                <select
+                  name="paymentMethod"
+                  value={formData.paymentMethod}
+                  onChange={handleChange}
+                  className="form-select"
+                  required
+                >
+
+                  <option value="cash">
+                    Cash
+                  </option>
+
+                  <option value="gpay">
+                    GPay
+                  </option>
+
+                </select>
+
+              </div>
+
+              {/* OUTSTANDING */}
+
+              {formData.party && (
+                <div className="col-12 mb-3">
+
+                  <div className="card border-info">
+
+                    <div className="card-body py-3">
+
+                      <div className="d-flex justify-content-between align-items-center">
+
+                        <div>
+
+                          <small className="text-muted d-block">
+
+                            {isShop
+                              ? "Current Shop Receivable"
+                              : "Current Distributor Payable"}
+
+                          </small>
+
+                          <h4 className="mb-0">
+
+                            {outstandingLoading
+                              ? "Loading..."
+                              : `₹${getOutstandingAmount().toLocaleString(
+                                  "en-IN"
+                                )}`}
+
+                          </h4>
+
+                        </div>
+
+                        {formData.amount &&
+                          outstanding &&
+                          !outstandingLoading && (
+
+                            <div className="text-end">
+
+                              <small className="text-muted d-block">
+                                After this payment
+                              </small>
+
+                              <strong>
+
+                                ₹
+                                {Math.max(
+                                  getOutstandingAmount() -
+                                    Number(
+                                      formData.amount
+                                    ),
+                                  0
+                                ).toLocaleString(
+                                  "en-IN"
+                                )}
+
+                              </strong>
+
+                            </div>
+
+                          )}
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* PAYMENT DATE */}
+
+              <div className="col-md-4 mb-3">
+
+                <label className="form-label">
+                  Payment Date
+                </label>
+
+                <input
+                  type="date"
+                  name="paymentDate"
+                  value={formData.paymentDate}
+                  onChange={handleChange}
+                  className="form-control"
+                />
+
+              </div>
+
+              {/* REFERENCE */}
+
+              <div className="col-md-4 mb-3">
+
+                <label className="form-label">
+                  Reference
+                </label>
+
+                <input
+                  type="text"
+                  name="reference"
+                  value={formData.reference}
+                  onChange={handleChange}
+                  className="form-control"
+                  placeholder="Optional"
+                />
+
+              </div>
+
+              {/* NOTES */}
+
+              <div className="col-md-4 mb-3">
+
+                <label className="form-label">
+                  Notes
+                </label>
+
+                <input
+                  type="text"
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleChange}
+                  className="form-control"
+                  placeholder="Optional"
+                />
+
+              </div>
+
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-success"
+              disabled={formLoading}
+            >
+              {formLoading
+                ? "Saving..."
+                : isShop
+                ? "Record Shop Payment"
+                : "Record Distributor Payment"}
+            </button>
+
+          </form>
+
+        </div>
+
+      </div>
+    );
+  };
+
+  // ==============================
+  // PAYMENT TABLE
+  // ==============================
+
+  const renderPaymentTable = (
+    paymentList,
+    emptyMessage
+  ) => {
+    if (paymentList.length === 0) {
+      return (
+        <div className="alert alert-info">
+          {emptyMessage}
+        </div>
+      );
+    }
+
+    return (
+      <div className="card shadow-sm">
+
+        <div className="card-body p-0">
+
+          <div className="table-responsive">
+
+            <table className="table table-hover mb-0">
+
+              <thead className="table-light">
+
+                <tr>
+
+                  <th>Party</th>
+                  <th>Amount</th>
+                  <th>Payment Method</th>
+                  <th>Date</th>
+                  <th>Reference</th>
+                  <th>Notes</th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {paymentList.map((payment) => (
+
+                  <tr key={payment._id}>
+
+                    <td>
+                      <strong>
+                        {getPartyName(payment)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <strong>
+                        ₹
+                        {Number(
+                          payment.amount || 0
+                        ).toLocaleString("en-IN")}
+                      </strong>
+                    </td>
+
+                    <td>
+
+                      <span
+                        className={`badge ${
+                          payment.paymentMethod ===
+                          "cash"
+                            ? "bg-success"
+                            : "bg-primary"
+                        }`}
+                      >
+                        {payment.paymentMethod}
+                      </span>
+
+                    </td>
+
+                    <td>
+                      {formatDate(
+                        payment.paymentDate
+                      )}
+                    </td>
+
+                    <td>
+                      {payment.reference || "-"}
+                    </td>
+
+                    <td>
+                      {payment.notes || "-"}
+                    </td>
+
+                  </tr>
+
+                ))}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </div>
+
+      </div>
+    );
+  };
+
+  // ==============================
   // LOADING
   // ==============================
 
   if (loading) {
     return (
       <div className="container py-4">
-        <h2>Payments</h2>
+
+        <h2>
+          Payments
+        </h2>
 
         <p className="text-muted">
           Loading payments...
         </p>
+
       </div>
     );
   }
@@ -399,27 +858,16 @@ function Payments() {
       <div className="d-flex justify-content-between align-items-center mb-4">
 
         <div>
+
           <h2 className="mb-1">
             Payments
           </h2>
 
           <p className="text-muted mb-0">
-            Track cash and GPay payments.
+            Manage money received from shops and money paid to distributors.
           </p>
-        </div>
 
-        {!showForm && (
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              setError("");
-              setSuccess("");
-              setShowForm(true);
-            }}
-          >
-            + Record Payment
-          </button>
-        )}
+        </div>
 
       </div>
 
@@ -439,333 +887,110 @@ function Payments() {
         </div>
       )}
 
-      {/* PAYMENT FORM */}
+      {/* PAYMENT FORMS */}
 
-      {showForm && (
-        <div className="card shadow-sm mb-4">
+      {showShopForm &&
+        renderPaymentForm()}
 
-          <div className="card-body">
+      {showDistributorForm &&
+        renderPaymentForm()}
 
-            <h5 className="mb-4">
-              Record Payment
-            </h5>
+      {/* SHOP PAYMENTS */}
 
-            <form onSubmit={handleSubmit}>
+      <div className="mb-5">
 
-              <div className="row">
+        <div className="d-flex justify-content-between align-items-center mb-3">
 
-                {/* PARTY TYPE */}
+          <div>
 
-                <div className="col-md-4 mb-3">
+            <h4 className="mb-1">
+              Shop Payments
+            </h4>
 
-                  <label className="form-label">
-                    Party Type{" "}
-                    <span className="text-danger">
-                      *
-                    </span>
-                  </label>
-
-                  <select
-                    name="partyType"
-                    value={formData.partyType}
-                    onChange={handlePartyTypeChange}
-                    className="form-select"
-                    required
-                  >
-                    <option value="shop">
-                      Shop
-                    </option>
-
-                    <option value="distributor">
-                      Distributor
-                    </option>
-                  </select>
-
-                </div>
-
-                {/* PARTY */}
-
-                <div className="col-md-4 mb-3">
-
-                  <label className="form-label">
-
-                    {formData.partyType === "shop"
-                      ? "Shop"
-                      : "Distributor"}
-
-                    {" "}
-
-                    <span className="text-danger">
-                      *
-                    </span>
-
-                  </label>
-
-                  <select
-                    name="party"
-                    value={formData.party}
-                    onChange={handleChange}
-                    className="form-select"
-                    required
-                  >
-
-                    <option value="">
-                      Select{" "}
-                      {formData.partyType === "shop"
-                        ? "Shop"
-                        : "Distributor"}
-                    </option>
-
-                    {partyOptions.map((party) => (
-                      <option
-                        key={party._id}
-                        value={party._id}
-                      >
-                        {party.name}
-                      </option>
-                    ))}
-
-                  </select>
-
-                </div>
-
-                {/* AMOUNT */}
-
-                <div className="col-md-4 mb-3">
-
-                  <label className="form-label">
-                    Amount (₹){" "}
-                    <span className="text-danger">
-                      *
-                    </span>
-                  </label>
-
-                  <input
-                    type="number"
-                    name="amount"
-                    value={formData.amount}
-                    onChange={handleChange}
-                    className="form-control"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="Enter amount"
-                    required
-                  />
-
-                </div>
-
-                {/* OUTSTANDING */}
-
-                {formData.party && (
-                  <div className="col-12 mb-3">
-
-                    <div className="card border-info">
-
-                      <div className="card-body py-3">
-
-                        <div className="d-flex justify-content-between align-items-center">
-
-                          <div>
-
-                            <small className="text-muted d-block">
-
-                              Current{" "}
-
-                              {formData.partyType === "shop"
-                                ? "Shop Receivable"
-                                : "Distributor Payable"}
-
-                            </small>
-
-                            <h4 className="mb-0">
-
-                              {outstandingLoading
-                                ? "Loading..."
-                                : `₹${getOutstandingAmount().toLocaleString(
-                                    "en-IN"
-                                  )}`}
-
-                            </h4>
-
-                          </div>
-
-                          {formData.amount &&
-                            outstanding &&
-                            !outstandingLoading && (
-
-                              <div className="text-end">
-
-                                <small className="text-muted d-block">
-                                  After this payment
-                                </small>
-
-                                <strong>
-
-                                  ₹
-                                  {Math.max(
-                                    getOutstandingAmount() -
-                                      Number(
-                                        formData.amount
-                                      ),
-                                    0
-                                  ).toLocaleString(
-                                    "en-IN"
-                                  )}
-
-                                </strong>
-
-                              </div>
-
-                            )}
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-                )}
-
-                {/* PAYMENT METHOD */}
-
-                <div className="col-md-4 mb-3">
-
-                  <label className="form-label">
-                    Payment Method{" "}
-                    <span className="text-danger">
-                      *
-                    </span>
-                  </label>
-
-                  <select
-                    name="paymentMethod"
-                    value={formData.paymentMethod}
-                    onChange={handleChange}
-                    className="form-select"
-                    required
-                  >
-
-                    <option value="cash">
-                      Cash
-                    </option>
-
-                    <option value="gpay">
-                      GPay
-                    </option>
-
-                  </select>
-
-                </div>
-
-                {/* PAYMENT DATE */}
-
-                <div className="col-md-4 mb-3">
-
-                  <label className="form-label">
-                    Payment Date
-                  </label>
-
-                  <input
-                    type="date"
-                    name="paymentDate"
-                    value={formData.paymentDate}
-                    onChange={handleChange}
-                    className="form-control"
-                  />
-
-                </div>
-
-                {/* REFERENCE */}
-
-                <div className="col-md-4 mb-3">
-
-                  <label className="form-label">
-                    Reference
-                  </label>
-
-                  <input
-                    type="text"
-                    name="reference"
-                    value={formData.reference}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="Optional"
-                  />
-
-                </div>
-
-                {/* NOTES */}
-
-                <div className="col-12 mb-3">
-
-                  <label className="form-label">
-                    Notes
-                  </label>
-
-                  <textarea
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleChange}
-                    className="form-control"
-                    rows="3"
-                    placeholder="Optional notes"
-                  />
-
-                </div>
-
-              </div>
-
-              {/* BUTTONS */}
-
-              <div className="d-flex gap-2">
-
-                <button
-                  type="submit"
-                  className="btn btn-success"
-                  disabled={formLoading}
-                >
-                  {formLoading
-                    ? "Saving..."
-                    : "Record Payment"}
-                </button>
-
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={resetForm}
-                  disabled={formLoading}
-                >
-                  Cancel
-                </button>
-
-              </div>
-
-            </form>
+            <p className="text-muted mb-0">
+              Money received from shops.
+            </p>
 
           </div>
 
+          {!showShopForm &&
+            !showDistributorForm && (
+              <button
+                className="btn btn-success"
+                onClick={openShopForm}
+              >
+                + Record Shop Payment
+              </button>
+            )}
+
         </div>
-      )}
 
-      {/* PAYMENT SUMMARY */}
+        <div className="row mb-3">
 
-      <div className="row mb-4">
+          <div className="col-md-4 mb-3">
 
-        <div className="col-md-4 mb-3">
+            <div className="card shadow-sm h-100">
 
-          <div className="card shadow-sm h-100">
+              <div className="card-body">
 
-            <div className="card-body">
+                <p className="text-muted mb-1">
+                  Cash Received
+                </p>
 
-              <p className="text-muted mb-1">
-                Cash Payments
-              </p>
+                <h4 className="mb-0">
+                  ₹
+                  {shopCashTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h4>
 
-              <h3 className="mb-0">
-                ₹
-                {cashTotal.toLocaleString("en-IN")}
-              </h3>
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  GPay Received
+                </p>
+
+                <h4 className="mb-0">
+                  ₹
+                  {shopGpayTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h4>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  Total Received
+                </p>
+
+                <h4 className="mb-0">
+                  ₹
+                  {shopGrandTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h4>
+
+              </div>
 
             </div>
 
@@ -773,20 +998,109 @@ function Payments() {
 
         </div>
 
-        <div className="col-md-4 mb-3">
+        {renderPaymentTable(
+          shopPayments,
+          "No shop payments found."
+        )}
 
-          <div className="card shadow-sm h-100">
+      </div>
 
-            <div className="card-body">
+      {/* DISTRIBUTOR PAYMENTS */}
 
-              <p className="text-muted mb-1">
-                GPay Payments
-              </p>
+      <div className="mb-5">
 
-              <h3 className="mb-0">
-                ₹
-                {gpayTotal.toLocaleString("en-IN")}
-              </h3>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+
+          <div>
+
+            <h4 className="mb-1">
+              Distributor Payments
+            </h4>
+
+            <p className="text-muted mb-0">
+              Money paid to distributors.
+            </p>
+
+          </div>
+
+          {!showShopForm &&
+            !showDistributorForm && (
+              <button
+                className="btn btn-danger"
+                onClick={openDistributorForm}
+              >
+                + Record Distributor Payment
+              </button>
+            )}
+
+        </div>
+
+        <div className="row mb-3">
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  Cash Paid
+                </p>
+
+                <h4 className="mb-0">
+                  ₹
+                  {distributorCashTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h4>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  GPay Paid
+                </p>
+
+                <h4 className="mb-0">
+                  ₹
+                  {distributorGpayTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h4>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  Total Paid
+                </p>
+
+                <h4 className="mb-0">
+                  ₹
+                  {distributorGrandTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h4>
+
+              </div>
 
             </div>
 
@@ -794,20 +1108,95 @@ function Payments() {
 
         </div>
 
-        <div className="col-md-4 mb-3">
+        {renderPaymentTable(
+          distributorPayments,
+          "No distributor payments found."
+        )}
 
-          <div className="card shadow-sm h-100">
+      </div>
 
-            <div className="card-body">
+      {/* OVERALL CASH / GPAY SUMMARY */}
 
-              <p className="text-muted mb-1">
-                Total Payments
-              </p>
+      <div>
 
-              <h3 className="mb-0">
-                ₹
-                {grandTotal.toLocaleString("en-IN")}
-              </h3>
+        <div className="mb-3">
+
+          <h4>
+            Overall Payment Summary
+          </h4>
+
+          <p className="text-muted">
+            Combined shop and distributor payments.
+          </p>
+
+        </div>
+
+        <div className="row">
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  Cash
+                </p>
+
+                <h3 className="mb-0">
+                  ₹
+                  {cashTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h3>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  GPay
+                </p>
+
+                <h3 className="mb-0">
+                  ₹
+                  {gpayTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h3>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="col-md-4 mb-3">
+
+            <div className="card shadow-sm h-100">
+
+              <div className="card-body">
+
+                <p className="text-muted mb-1">
+                  Total Payments
+                </p>
+
+                <h3 className="mb-0">
+                  ₹
+                  {grandTotal.toLocaleString(
+                    "en-IN"
+                  )}
+                </h3>
+
+              </div>
 
             </div>
 
@@ -816,129 +1205,6 @@ function Payments() {
         </div>
 
       </div>
-
-      {/* PAYMENT HISTORY */}
-
-      <div className="mb-3">
-
-        <h4>
-          Payment History
-        </h4>
-
-        <p className="text-muted">
-          All recorded payments.
-        </p>
-
-      </div>
-
-      {payments.length === 0 ? (
-
-        <div className="alert alert-info">
-          No payments found.
-        </div>
-
-      ) : (
-
-        <div className="card shadow-sm">
-
-          <div className="card-body p-0">
-
-            <div className="table-responsive">
-
-              <table className="table table-hover mb-0">
-
-                <thead className="table-light">
-
-                  <tr>
-
-                    <th>Party</th>
-
-                    <th>Type</th>
-
-                    <th>Amount</th>
-
-                    <th>Payment Method</th>
-
-                    <th>Date</th>
-
-                    <th>Reference</th>
-
-                    <th>Notes</th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {payments.map((payment) => (
-
-                    <tr key={payment._id}>
-
-                      <td>
-                        <strong>
-                          {getPartyName(payment)}
-                        </strong>
-                      </td>
-
-                      <td>
-                        <span className="text-capitalize">
-                          {payment.partyType}
-                        </span>
-                      </td>
-
-                      <td>
-                        <strong>
-                          ₹
-                          {Number(
-                            payment.amount || 0
-                          ).toLocaleString("en-IN")}
-                        </strong>
-                      </td>
-
-                      <td>
-
-                        <span
-                          className={`badge ${
-                            payment.paymentMethod === "cash"
-                              ? "bg-success"
-                              : "bg-primary"
-                          }`}
-                        >
-                          {payment.paymentMethod}
-                        </span>
-
-                      </td>
-
-                      <td>
-                        {formatDate(
-                          payment.paymentDate
-                        )}
-                      </td>
-
-                      <td>
-                        {payment.reference || "-"}
-                      </td>
-
-                      <td>
-                        {payment.notes || "-"}
-                      </td>
-
-                    </tr>
-
-                  ))}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      )}
 
     </div>
   );

@@ -1,3 +1,4 @@
+
 const Delivery = require("../models/Delivery");
 const PurchaseReceipt = require("../models/PurchaseReceipt");
 const Return = require("../models/Return");
@@ -496,21 +497,46 @@ const getPaymentReport = async (req, res) => {
 
     const shopSummary = {};
     const distributorSummary = {};
+    const dayWise = {};
 
     for (const payment of payments) {
-      const amount = payment.amount || 0;
+      const amount = Number(payment.amount || 0);
 
       totalPayments += amount;
 
+      const paymentDate = new Date(
+        payment.paymentDate || payment.createdAt
+      );
+
+      const dateKey = paymentDate
+        .toISOString()
+        .split("T")[0];
+
+      if (!dayWise[dateKey]) {
+        dayWise[dateKey] = {
+          date: dateKey,
+          shopPayments: 0,
+          distributorPayments: 0,
+          cashReceived: 0,
+          gpayReceived: 0,
+          cashPaid: 0,
+          gpayPaid: 0,
+          profitLoss: 0,
+        };
+      }
+
       if (payment.partyType === "shop") {
         shopPayments += amount;
+        dayWise[dateKey].shopPayments += amount;
 
         if (payment.paymentMethod === "cash") {
           cashReceived += amount;
+          dayWise[dateKey].cashReceived += amount;
         }
 
         if (payment.paymentMethod === "gpay") {
           gpayReceived += amount;
+          dayWise[dateKey].gpayReceived += amount;
         }
 
         const shopId =
@@ -544,13 +570,16 @@ const getPaymentReport = async (req, res) => {
 
       if (payment.partyType === "distributor") {
         distributorPayments += amount;
+        dayWise[dateKey].distributorPayments += amount;
 
         if (payment.paymentMethod === "cash") {
           cashPaid += amount;
+          dayWise[dateKey].cashPaid += amount;
         }
 
         if (payment.paymentMethod === "gpay") {
           gpayPaid += amount;
+          dayWise[dateKey].gpayPaid += amount;
         }
 
         const distributorId =
@@ -588,6 +617,16 @@ const getPaymentReport = async (req, res) => {
       }
     }
 
+    Object.values(dayWise).forEach((day) => {
+      day.profitLoss =
+        day.shopPayments -
+        day.distributorPayments;
+    });
+
+    const profitLoss =
+      shopPayments -
+      distributorPayments;
+
     res.status(200).json({
       filters: {
         from: from || null,
@@ -598,6 +637,7 @@ const getPaymentReport = async (req, res) => {
         totalPayments,
         shopPayments,
         distributorPayments,
+        profitLoss,
         cashReceived,
         gpayReceived,
         cashPaid,
@@ -609,6 +649,12 @@ const getPaymentReport = async (req, res) => {
 
       byDistributor:
         Object.values(distributorSummary),
+
+      dayWise: Object.values(dayWise).sort(
+        (a, b) =>
+          new Date(b.date) -
+          new Date(a.date)
+      ),
 
       payments,
     });
@@ -636,7 +682,6 @@ const getStockReport = async (req, res) => {
 
     const filter = {};
 
-    // Date filtering
     if (from || to) {
       filter.transactionDate = {};
 
@@ -653,7 +698,6 @@ const getStockReport = async (req, res) => {
       }
     }
 
-    // Get stock transactions in the selected period
     const transactions = await StockTransaction.find(filter)
       .populate("product")
       .sort({ transactionDate: -1 });
@@ -664,7 +708,6 @@ const getStockReport = async (req, res) => {
 
     const productSummary = {};
 
-    // Initialize active products
     for (const product of products) {
       const productId = product._id.toString();
 
@@ -691,7 +734,14 @@ const getStockReport = async (req, res) => {
     let adjustmentInQuantity = 0;
     let adjustmentOutQuantity = 0;
 
-    // Process transactions
+    const dayWise = {};
+
+    const getDay = (date) => {
+      return new Date(date)
+        .toISOString()
+        .split("T")[0];
+    };
+
     for (const transaction of transactions) {
       const productId =
         transaction.product?._id?.toString();
@@ -700,7 +750,6 @@ const getStockReport = async (req, res) => {
         continue;
       }
 
-      // Create entry if transaction belongs to inactive product
       if (!productSummary[productId]) {
         productSummary[productId] = {
           productId,
@@ -722,19 +771,42 @@ const getStockReport = async (req, res) => {
         };
       }
 
-      const quantity = transaction.quantity || 0;
+      const quantity = Number(
+        transaction.quantity || 0
+      );
+
+      const dateKey = getDay(
+        transaction.transactionDate
+      );
+
+      if (!dayWise[dateKey]) {
+        dayWise[dateKey] = {
+          date: dateKey,
+          purchaseQuantity: 0,
+          salesQuantity: 0,
+          salesReturnQuantity: 0,
+          purchaseReturnQuantity: 0,
+          adjustmentInQuantity: 0,
+          adjustmentOutQuantity: 0,
+          netMovement: 0,
+        };
+      }
 
       switch (transaction.type) {
         case "PURCHASE_RECEIPT":
           purchaseQuantity += quantity;
-          productSummary[productId].purchaseQuantity +=
-            quantity;
+          productSummary[
+            productId
+          ].purchaseQuantity += quantity;
+          dayWise[dateKey].purchaseQuantity += quantity;
           break;
 
         case "DELIVERY":
           salesQuantity += quantity;
-          productSummary[productId].salesQuantity +=
-            quantity;
+          productSummary[
+            productId
+          ].salesQuantity += quantity;
+          dayWise[dateKey].salesQuantity += quantity;
           break;
 
         case "SALES_RETURN":
@@ -742,6 +814,7 @@ const getStockReport = async (req, res) => {
           productSummary[
             productId
           ].salesReturnQuantity += quantity;
+          dayWise[dateKey].salesReturnQuantity += quantity;
           break;
 
         case "PURCHASE_RETURN":
@@ -749,6 +822,7 @@ const getStockReport = async (req, res) => {
           productSummary[
             productId
           ].purchaseReturnQuantity += quantity;
+          dayWise[dateKey].purchaseReturnQuantity += quantity;
           break;
 
         case "ADJUSTMENT_IN":
@@ -756,6 +830,7 @@ const getStockReport = async (req, res) => {
           productSummary[
             productId
           ].adjustmentInQuantity += quantity;
+          dayWise[dateKey].adjustmentInQuantity += quantity;
           break;
 
         case "ADJUSTMENT_OUT":
@@ -763,11 +838,11 @@ const getStockReport = async (req, res) => {
           productSummary[
             productId
           ].adjustmentOutQuantity += quantity;
+          dayWise[dateKey].adjustmentOutQuantity += quantity;
           break;
       }
     }
 
-    // Calculate net movement and current stock
     Object.values(productSummary).forEach((product) => {
       product.netMovement =
         product.purchaseQuantity +
@@ -778,44 +853,62 @@ const getStockReport = async (req, res) => {
         product.adjustmentOutQuantity;
     });
 
-    // Current stock must represent actual current stock,
-    // independent of the selected date range.
-    for (const product of products) {
-      const productId = product._id.toString();
+    Object.values(dayWise).forEach((day) => {
+      day.netMovement =
+        day.purchaseQuantity +
+        day.salesReturnQuantity +
+        day.adjustmentInQuantity -
+        day.salesQuantity -
+        day.purchaseReturnQuantity -
+        day.adjustmentOutQuantity;
+    });
 
-      const allTransactions =
-        await StockTransaction.find({
-          product: product._id,
-        });
+    const allTransactions = await StockTransaction.find();
 
-      let currentStock = 0;
+    const currentStockByProduct = {};
 
-      for (const transaction of allTransactions) {
-        if (
-          transaction.type ===
-            "PURCHASE_RECEIPT" ||
-          transaction.type ===
-            "SALES_RETURN" ||
-          transaction.type ===
-            "ADJUSTMENT_IN"
-        ) {
-          currentStock += transaction.quantity;
-        }
+    for (const transaction of allTransactions) {
+      const productId =
+        transaction.product?.toString();
 
-        if (
-          transaction.type === "DELIVERY" ||
-          transaction.type ===
-            "PURCHASE_RETURN" ||
-          transaction.type ===
-            "ADJUSTMENT_OUT"
-        ) {
-          currentStock -= transaction.quantity;
-        }
+      if (!productId) {
+        continue;
       }
 
-      productSummary[productId].currentStock =
-        currentStock;
+      if (!currentStockByProduct[productId]) {
+        currentStockByProduct[productId] = 0;
+      }
+
+      const quantity = Number(
+        transaction.quantity || 0
+      );
+
+      if (
+        transaction.type === "PURCHASE_RECEIPT" ||
+        transaction.type === "SALES_RETURN" ||
+        transaction.type === "ADJUSTMENT_IN"
+      ) {
+        currentStockByProduct[productId] += quantity;
+      }
+
+      if (
+        transaction.type === "DELIVERY" ||
+        transaction.type === "PURCHASE_RETURN" ||
+        transaction.type === "ADJUSTMENT_OUT"
+      ) {
+        currentStockByProduct[productId] -= quantity;
+      }
     }
+
+    let currentStock = 0;
+
+    Object.values(productSummary).forEach((product) => {
+      const stock =
+        currentStockByProduct[product.productId] || 0;
+
+      product.currentStock = stock;
+      currentStock += stock;
+    });
 
     const netMovement =
       purchaseQuantity +
@@ -824,6 +917,8 @@ const getStockReport = async (req, res) => {
       salesQuantity -
       purchaseReturnQuantity -
       adjustmentOutQuantity;
+
+    const soldQuantity = salesQuantity;
 
     res.status(200).json({
       filters: {
@@ -834,15 +929,23 @@ const getStockReport = async (req, res) => {
       summary: {
         purchaseQuantity,
         salesQuantity,
+        soldQuantity,
         salesReturnQuantity,
         purchaseReturnQuantity,
         adjustmentInQuantity,
         adjustmentOutQuantity,
         netMovement,
+        currentStock,
       },
 
       byProduct:
         Object.values(productSummary),
+
+      dayWise: Object.values(dayWise).sort(
+        (a, b) =>
+          new Date(b.date) -
+          new Date(a.date)
+      ),
 
       transactions,
     });
@@ -870,3 +973,4 @@ module.exports = {
   getPaymentReport,
   getStockReport,
 };
+
