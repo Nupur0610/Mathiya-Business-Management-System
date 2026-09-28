@@ -29,7 +29,7 @@ function ShopOrders() {
   const fetchOrders = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/shop-orders"
+        `${import.meta.env.VITE_API_URL}/shop-orders`
       );
 
       setOrders(response.data);
@@ -43,7 +43,7 @@ function ShopOrders() {
   const fetchDeliveries = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/deliveries"
+        `${import.meta.env.VITE_API_URL}/deliveries`
       );
 
       setDeliveries(response.data);
@@ -57,7 +57,7 @@ function ShopOrders() {
   const fetchShops = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/shops"
+        `${import.meta.env.VITE_API_URL}/shops`
       );
 
       setShops(response.data);
@@ -71,7 +71,7 @@ function ShopOrders() {
   const fetchProducts = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/products"
+        `${import.meta.env.VITE_API_URL}/products`
       );
 
       setProducts(response.data);
@@ -233,7 +233,7 @@ function ShopOrders() {
       };
 
       await axios.post(
-        "http://localhost:5000/api/shop-orders",
+        `${import.meta.env.VITE_API_URL}/shop-orders`,
         orderData
       );
 

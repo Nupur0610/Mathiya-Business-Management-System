@@ -28,7 +28,7 @@ function Deliveries() {
   const fetchDeliveries = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/deliveries"
+        `${import.meta.env.VITE_API_URL}/deliveries`
       );
 
       setDeliveries(response.data);
@@ -44,7 +44,7 @@ function Deliveries() {
   const fetchShopOrders = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/shop-orders"
+        `${import.meta.env.VITE_API_URL}/shop-orders`
       );
 
       setShopOrders(response.data);
@@ -277,7 +277,7 @@ function Deliveries() {
       };
 
       const response = await axios.post(
-        "http://localhost:5000/api/deliveries",
+        `${import.meta.env.VITE_API_URL}/deliveries`,
         deliveryData
       );
 

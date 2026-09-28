@@ -22,8 +22,8 @@ function Products() {
       setError("");
 
       const [productsResponse, stockResponse] = await Promise.all([
-        axios.get("http://localhost:5000/api/products"),
-        axios.get("http://localhost:5000/api/stock"),
+        axios.get(`${import.meta.env.VITE_API_URL}/products`),
+        axios.get(`${import.meta.env.VITE_API_URL}/stock`),
       ]);
 
       setProducts(productsResponse.data);
@@ -54,7 +54,7 @@ function Products() {
       setError("");
 
       await axios.post(
-        "http://localhost:5000/api/products",
+        `${import.meta.env.VITE_API_URL}/products`,
         formData
       );
 

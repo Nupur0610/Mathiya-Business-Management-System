@@ -32,7 +32,7 @@ function Returns() {
   const fetchReturns = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/returns"
+        `${import.meta.env.VITE_API_URL}/returns`
       );
 
       setReturns(response.data);
@@ -45,7 +45,7 @@ function Returns() {
   const fetchShops = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/shops"
+        `${import.meta.env.VITE_API_URL}/shops`
       );
 
       setShops(response.data);
@@ -58,7 +58,7 @@ function Returns() {
   const fetchDistributors = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/distributors"
+        `${import.meta.env.VITE_API_URL}/distributors`
       );
 
       setDistributors(response.data);
@@ -71,7 +71,7 @@ function Returns() {
   const fetchProducts = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/products"
+        `${import.meta.env.VITE_API_URL}/products`
       );
 
       setProducts(response.data);
@@ -84,7 +84,7 @@ function Returns() {
   const fetchDeliveries = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/deliveries"
+        `${import.meta.env.VITE_API_URL}/deliveries`
       );
 
       setDeliveries(response.data);
@@ -96,7 +96,7 @@ function Returns() {
   const fetchPurchaseReceipts = async () => {
     try {
       const response = await axios.get(
-        "http://localhost:5000/api/purchase-receipts"
+        `${import.meta.env.VITE_API_URL}/purchase-receipts`
       );
 
       setPurchaseReceipts(response.data);
@@ -323,7 +323,7 @@ function Returns() {
       }
 
       await axios.post(
-        "http://localhost:5000/api/returns",
+        `${import.meta.env.VITE_API_URL}/returns`,
         returnData
       );
 

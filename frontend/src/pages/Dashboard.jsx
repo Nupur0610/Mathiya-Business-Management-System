@@ -34,12 +34,12 @@ function Dashboard() {
         shopsResponse,
         distributorsResponse,
       ] = await Promise.all([
-        api.get("http://localhost:5000/api/stock"),
-        api.get("http://localhost:5000/api/shop-orders"),
-        api.get("http://localhost:5000/api/deliveries"),
-        api.get("http://localhost:5000/api/payments"),
-        api.get("http://localhost:5000/api/shops"),
-        api.get("http://localhost:5000/api/distributors"),
+        api.get(`${import.meta.env.VITE_API_URL}/stock`),
+        api.get(`${import.meta.env.VITE_API_URL}/shop-orders`),
+        api.get(`${import.meta.env.VITE_API_URL}/deliveries`),
+        api.get(`${import.meta.env.VITE_API_URL}/payments`),
+        api.get(`${import.meta.env.VITE_API_URL}/shops`),
+        api.get(`${import.meta.env.VITE_API_URL}/distributors`),
       ]);
 
       setStock(stockResponse.data);
@@ -55,7 +55,7 @@ function Dashboard() {
         await Promise.all(
           shopsResponse.data.map((shop) =>
             api.get(
-              `http://localhost:5000/api/outstanding/shops/${shop._id}`
+              `${import.meta.env.VITE_API_URL}/outstanding/shops/${shop._id}`
             )
           )
         );
@@ -83,7 +83,7 @@ function Dashboard() {
           distributorsResponse.data.map(
             (distributor) =>
               api.get(
-                `http://localhost:5000/api/outstanding/distributors/${distributor._id}`
+                `${import.meta.env.VITE_API_URL}/outstanding/distributors/${distributor._id}`
               )
           )
         );

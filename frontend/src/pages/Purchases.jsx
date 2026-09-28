@@ -45,10 +45,10 @@ function Purchases() {
         distributorsResponse,
         productsResponse,
       ] = await Promise.all([
-        axios.get("http://localhost:5000/api/purchase-orders"),
-        axios.get("http://localhost:5000/api/purchase-receipts"),
-        axios.get("http://localhost:5000/api/distributors"),
-        axios.get("http://localhost:5000/api/products"),
+        axios.get(`${import.meta.env.VITE_API_URL}/purchase-orders`),
+        axios.get(`${import.meta.env.VITE_API_URL}/purchase-receipts`),
+        axios.get(`${import.meta.env.VITE_API_URL}/distributors`),
+        axios.get(`${import.meta.env.VITE_API_URL}/products`),
       ]);
 
       setOrders(ordersResponse.data);
@@ -90,7 +90,7 @@ function Purchases() {
 
     try {
       const response = await axios.get(
-        `http://localhost:5000/api/purchase-prices/${distributorId}/${productId}`
+        `${import.meta.env.VITE_API_URL}/purchase-prices/${distributorId}/${productId}`
       );
 
       setFormData((prev) => ({
@@ -175,7 +175,7 @@ function Purchases() {
       };
 
       await axios.post(
-        "http://localhost:5000/api/purchase-orders",
+        `${import.meta.env.VITE_API_URL}/purchase-orders`,
         payload
       );
 
@@ -262,7 +262,7 @@ function Purchases() {
       };
 
       await axios.post(
-        "http://localhost:5000/api/purchase-receipts",
+        `${import.meta.env.VITE_API_URL}/purchase-receipts`,
         payload
       );
 
