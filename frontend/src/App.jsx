@@ -1,7 +1,10 @@
 
+import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
+import Login from "./pages/Login";
+import { getToken } from "./services/auth";
 
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
@@ -20,6 +23,18 @@ import CashTransactions from "./pages/CashTransactions";
 import StockAdjustments from "./pages/StockAdjustments";
 
 function App() {
+  const [loggedIn, setLoggedIn] = useState(() => !!getToken());
+
+  useEffect(() => {
+    const onExpired = () => setLoggedIn(false);
+    window.addEventListener("auth-expired", onExpired);
+    return () => window.removeEventListener("auth-expired", onExpired);
+  }, []);
+
+  if (!loggedIn) {
+    return <Login onLogin={() => setLoggedIn(true)} />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>

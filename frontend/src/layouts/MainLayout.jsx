@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { logout } from "../services/auth";
 
 function MainLayout() {
+  const [menuOpen, setMenuOpen] = useState(false);
   const navClass = ({ isActive }) =>
     `nav-link ${
       isActive
@@ -10,10 +13,20 @@ function MainLayout() {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
+      {/* Dark backdrop behind the menu on phones */}
+      {menuOpen && (
+        <div
+          className="app-backdrop d-lg-none"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className="bg-dark text-white p-3"
-        style={{ width: "250px" }}
+        className={`app-sidebar bg-dark text-white p-3 ${
+          menuOpen ? "open" : ""
+        }`}
+        onClick={() => setMenuOpen(false)}
       >
         <div className="mb-4">
           <h4 className="mb-1">Mathiya</h4>
@@ -101,16 +114,31 @@ function MainLayout() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-grow-1">
+      <div className="flex-grow-1 app-content">
         {/* Top Header */}
-        <header className="bg-white border-bottom px-4 py-3">
-          <h5 className="mb-0">
+        <header className="bg-white border-bottom px-3 px-lg-4 py-3 d-flex align-items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-outline-secondary d-lg-none"
+            aria-label="Open menu"
+            onClick={() => setMenuOpen(true)}
+          >
+            &#9776;
+          </button>
+          <h5 className="mb-0 flex-grow-1">
             Mathiya Business Management System
           </h5>
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm"
+            onClick={logout}
+          >
+            Logout
+          </button>
         </header>
 
         {/* Current Page */}
-        <main className="p-4">
+        <main className="p-3 p-lg-4">
           <Outlet />
         </main>
       </div>
