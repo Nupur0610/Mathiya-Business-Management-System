@@ -1,8 +1,20 @@
 
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+} from "../components/EditTools";
 
 function Shops() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
   const [shops, setShops] = useState([]);
   const [outstandings, setOutstandings] = useState({});
   const [showForm, setShowForm] = useState(false);
@@ -172,6 +184,33 @@ function Shops() {
         )}
       </div>
 
+      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Shop"
+          path="/shops"
+          record={editing}
+          fields={[
+            { name: "name", label: "Shop name", required: true },
+            { name: "ownerName", label: "Owner name" },
+            { name: "phone", label: "Phone" },
+            { name: "address", label: "Address" },
+          ]}
+          initialValues={{
+            name: editing.name,
+            ownerName: editing.ownerName || "",
+            phone: editing.phone || "",
+            address: editing.address || "",
+          }}
+          onSaved={fetchShops}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
       {error && (
         <div className="alert alert-danger">
           {error}
@@ -302,12 +341,13 @@ function Shops() {
                     <th>Owner</th>
                     <th>Phone</th>
                     <th>Address</th>
-                    <th>Outstanding</th>
-                  </tr>
+                    <th>Outstanding / Advance</th>
+                  <ActionsHeader editMode={editMode} />
+</tr>
                 </thead>
 
                 <tbody>
-                  {shops.map((shop) => (
+                  {shops.filter(matchesSearch(search)).map((shop) => (
                     <tr key={shop._id}>
                       <td>
                         <strong>{shop.name}</strong>
@@ -320,14 +360,29 @@ function Shops() {
                       <td>{shop.address || "-"}</td>
 
                       <td>
-                        <strong>
-                          ₹
-                          {Number(
-                            outstandings[shop._id] || 0
-                          ).toLocaleString("en-IN")}
-                        </strong>
-                      </td>
-                    </tr>
+  {Number(outstandings[shop._id] || 0) < 0 ? (
+    <span className="badge bg-success fs-6">
+      Advance ₹
+      {Math.abs(Number(outstandings[shop._id])).toLocaleString("en-IN")}
+    </span>
+  ) : (
+    <strong
+      className={
+        Number(outstandings[shop._id] || 0) > 0 ? "text-danger" : ""
+      }
+    >
+      ₹{Number(outstandings[shop._id] || 0).toLocaleString("en-IN")}
+    </strong>
+  )}
+</td>
+                    <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(shop)}
+  onDelete={() =>
+    deleteEntry({ path: "/shops", id: shop._id, label: "shop", onDone: fetchShops })
+  }
+/>
+</tr>
                   ))}
                 </tbody>
               </table>

@@ -48,10 +48,16 @@ const createStockTransaction = async ({
   return transaction[0];
 };
 
-const getStockQuantity = async (productId) => {
-  const transactions = await StockTransaction.find({
+const getStockQuantity = async (productId, session) => {
+  const query = StockTransaction.find({
     product: productId,
   });
+
+  if (session) {
+    query.session(session);
+  }
+
+  const transactions = await query;
 
   let stock = 0;
 
@@ -76,7 +82,46 @@ const getStockQuantity = async (productId) => {
   return stock;
 };
 
+// Remove every stock transaction created by one record
+// (used when a delivery / receipt / return / adjustment is edited or deleted)
+const deleteStockTransactionsByReference = async (
+  referenceType,
+  referenceId,
+  session
+) => {
+  await StockTransaction.deleteMany(
+    { referenceType, referenceId },
+    { session }
+  );
+};
+
+// Throw an error if stock of any of these products is below zero.
+// Called inside a transaction, so the whole change is rolled back.
+const assertStockNotNegative = async (productIds, session) => {
+  const Product = require("../models/Product");
+
+  const uniqueIds = [
+    ...new Set(productIds.filter(Boolean).map((id) => String(id))),
+  ];
+
+  for (const id of uniqueIds) {
+    const quantity = await getStockQuantity(id, session);
+
+    if (quantity < -0.0001) {
+      const product = await Product.findById(id);
+
+      throw new Error(
+        `This change would make the stock of ${
+          product ? product.name : "a product"
+        } negative (${quantity} kg). Nothing was changed.`
+      );
+    }
+  }
+};
+
 module.exports = {
   createStockTransaction,
   getStockQuantity,
+  deleteStockTransactionsByReference,
+  assertStockNotNegative,
 };

@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  deleteEntry,
+} from "../components/EditTools";
 
 function getTodayDate() {
   const now = new Date();
@@ -20,6 +26,7 @@ function formatAmount(amount) {
 }
 
 function DailyBalance() {
+  const [editMode, setEditMode] = useState(false);
   const [date, setDate] = useState(getTodayDate());
 
   const [openingCash, setOpeningCash] = useState(0);
@@ -417,6 +424,12 @@ function DailyBalance() {
         </div>
       </div>
 
+      <div className="d-flex justify-content-end mb-3">
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+
+
       {message && (
         <div className="alert alert-success">
           {message}
@@ -801,14 +814,15 @@ function DailyBalance() {
                       <th>Expected GPay</th>
                       <th>Actual GPay</th>
                       <th>GPay Difference</th>
-                    </tr>
+                    <ActionsHeader editMode={editMode} />
+</tr>
                   </thead>
 
                   <tbody>
                     {history.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="9"
+                          colSpan={editMode ? 10 : 9}
                           className="text-center py-4 text-muted"
                         >
                           No daily closing records yet.
@@ -874,7 +888,25 @@ function DailyBalance() {
                               balance.gpayDifference
                             )}
                           </td>
-                        </tr>
+                        <ActionsCell
+  editMode={editMode}
+  onEdit={() => {
+    setDate(getIndiaDate(balance.date));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.alert(
+      "This day is now selected at the top. Change the actual cash / GPay and press Save Daily Closing to update it."
+    );
+  }}
+  onDelete={() =>
+    deleteEntry({
+      path: "/daily-balances",
+      id: balance._id,
+      label: "daily balance",
+      onDone: loadData,
+    })
+  }
+/>
+</tr>
                       ))
                     )}
                   </tbody>

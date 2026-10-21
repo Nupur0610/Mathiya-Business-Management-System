@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+  indiaDate,
+} from "../components/EditTools";
 
 function Returns() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
   const [returns, setReturns] = useState([]);
   const [shops, setShops] = useState([]);
   const [distributors, setDistributors] = useState([]);
@@ -408,6 +421,54 @@ function Returns() {
         )}
       </div>
 
+      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Return"
+          path="/returns"
+          record={editing}
+          fields={[
+            editing.returnType === "from_shop"
+              ? {
+                  name: "shop",
+                  label: "Shop",
+                  type: "select",
+                  required: true,
+                  options: shops.map((x) => ({ value: x._id, label: x.name })),
+                }
+              : {
+                  name: "distributor",
+                  label: "Distributor",
+                  type: "select",
+                  required: true,
+                  options: distributors.map((x) => ({ value: x._id, label: x.name })),
+                },
+            { name: "returnDate", label: "Return date", type: "date", required: true },
+            { name: "reason", label: "Reason" },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            shop: editing.shop?._id || "",
+            distributor: editing.distributor?._id || "",
+            returnDate: indiaDate(editing.returnDate),
+            reason: editing.reason || "",
+            notes: editing.notes || "",
+          }}
+          itemsConfig={{ products, qtyKey: "quantity", qtyLabel: "Quantity (kg)" }}
+          initialItems={editing.items.map((i) => ({
+            product: i.product?._id || "",
+            quantity: i.quantity,
+            pricePerKg: i.pricePerKg,
+          }))}
+          onSaved={() => Promise.all([fetchReturns(), fetchDeliveries(), fetchPurchaseReceipts()])}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
       {error && (
         <div className="alert alert-danger">
           {error}
@@ -662,11 +723,12 @@ function Returns() {
                     <th>Total</th>
                     <th>Date</th>
                     <th>Reason</th>
-                  </tr>
+                  <ActionsHeader editMode={editMode} />
+</tr>
                 </thead>
 
                 <tbody>
-                  {returns.map((returnItem) => {
+                  {returns.filter(matchesSearch(search)).map((returnItem) => {
                     const totalQuantity =
                       returnItem.items.reduce(
                         (total, item) =>
@@ -746,7 +808,14 @@ function Returns() {
                           {returnItem.reason ||
                             "-"}
                         </td>
-                      </tr>
+                      <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(returnItem)}
+  onDelete={() =>
+    deleteEntry({ path: "/returns", id: returnItem._id, label: "return", onDone: () => Promise.all([fetchReturns(), fetchDeliveries(), fetchPurchaseReceipts()]) })
+  }
+/>
+</tr>
                     );
                   })}
                 </tbody>

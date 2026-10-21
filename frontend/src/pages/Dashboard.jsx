@@ -13,6 +13,15 @@ function Dashboard() {
   const [distributorPayable, setDistributorPayable] =
     useState(0);
 
+  // Advance = party paid more than it owes. Kept apart from dues so
+  // one shop's advance never reduces another shop's outstanding.
+  const [shopAdvance, setShopAdvance] = useState(0);
+  const [distributorAdvance, setDistributorAdvance] =
+    useState(0);
+
+  const [receipts, setReceipts] = useState([]);
+  const [shopDues, setShopDues] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -33,6 +42,7 @@ function Dashboard() {
         paymentsResponse,
         shopsResponse,
         distributorsResponse,
+        receiptsResponse,
       ] = await Promise.all([
         api.get("/stock"),
         api.get("/shop-orders"),
@@ -40,12 +50,14 @@ function Dashboard() {
         api.get("/payments"),
         api.get("/shops"),
         api.get("/distributors"),
+        api.get("/purchase-receipts"),
       ]);
 
       setStock(stockResponse.data);
       setOrders(ordersResponse.data);
       setDeliveries(deliveriesResponse.data);
       setPayments(paymentsResponse.data);
+      setReceipts(receiptsResponse.data);
 
       // ==============================
       // FETCH SHOP OUTSTANDING
@@ -60,18 +72,33 @@ function Dashboard() {
           )
         );
 
-      const totalShopOutstanding =
-        shopOutstandingResponses.reduce(
-          (total, response) =>
-            total +
-            Number(
-              response.data.outstanding || 0
-            ),
-          0
-        );
+      const shopBalances = shopOutstandingResponses.map(
+        (response, index) => {
+          const outstanding = Number(
+            response.data.outstanding || 0
+          );
+
+          return {
+            name: shopsResponse.data[index]?.name || "-",
+            due: Math.max(outstanding, 0),
+            advance: Math.max(-outstanding, 0),
+          };
+        }
+      );
 
       setShopOutstanding(
-        totalShopOutstanding
+        shopBalances.reduce((t, b) => t + b.due, 0)
+      );
+
+      setShopAdvance(
+        shopBalances.reduce((t, b) => t + b.advance, 0)
+      );
+
+      setShopDues(
+        shopBalances
+          .filter((b) => b.due > 0)
+          .sort((a, b) => b.due - a.due)
+          .slice(0, 5)
       );
 
       // ==============================
@@ -88,18 +115,23 @@ function Dashboard() {
           )
         );
 
-      const totalDistributorPayable =
-        distributorOutstandingResponses.reduce(
-          (total, response) =>
-            total +
-            Number(
-              response.data.outstanding || 0
-            ),
-          0
+      const distributorOutstandings =
+        distributorOutstandingResponses.map((response) =>
+          Number(response.data.outstanding || 0)
         );
 
       setDistributorPayable(
-        totalDistributorPayable
+        distributorOutstandings.reduce(
+          (t, v) => t + Math.max(v, 0),
+          0
+        )
+      );
+
+      setDistributorAdvance(
+        distributorOutstandings.reduce(
+          (t, v) => t + Math.max(-v, 0),
+          0
+        )
       );
     } catch (err) {
       console.error(
@@ -184,14 +216,78 @@ function Dashboard() {
   // ==============================
 
   const todaysPayments = payments
-    .filter((payment) =>
-      isToday(payment.paymentDate)
+    .filter(
+      (payment) =>
+        payment.partyType === "shop" &&
+        isToday(payment.paymentDate)
     )
     .reduce(
       (total, payment) =>
         total + Number(payment.amount || 0),
       0
     );
+
+  // ==============================
+  // THIS MONTH: SALES vs PURCHASES
+  // ==============================
+
+  const isThisMonth = (date) => {
+    if (!date) {
+      return false;
+    }
+
+    const target = new Date(date);
+
+    return (
+      target.getMonth() === today.getMonth() &&
+      target.getFullYear() === today.getFullYear()
+    );
+  };
+
+  const monthSales = deliveries
+    .filter((delivery) =>
+      isThisMonth(delivery.deliveredAt || delivery.createdAt)
+    )
+    .reduce(
+      (total, delivery) =>
+        total +
+        delivery.items.reduce(
+          (sum, item) =>
+            sum +
+            Number(item.quantityDelivered || 0) *
+              Number(item.pricePerKg || 0),
+          0
+        ),
+      0
+    );
+
+  const monthPurchases = receipts
+    .filter((receipt) =>
+      isThisMonth(receipt.receivedAt || receipt.createdAt)
+    )
+    .reduce(
+      (total, receipt) =>
+        total +
+        receipt.items.reduce(
+          (sum, item) =>
+            sum +
+            Number(item.quantityReceived || 0) *
+              Number(item.pricePerKg || 0),
+          0
+        ),
+      0
+    );
+
+  // ==============================
+  // LOW STOCK
+  // (change this number to set what counts as "low")
+  // ==============================
+
+  const LOW_STOCK_KG = 50;
+
+  const lowStock = stock
+    .filter((item) => Number(item.quantity || 0) < LOW_STOCK_KG)
+    .sort((a, b) => a.quantity - b.quantity);
 
   // ==============================
   // LOADING
@@ -379,62 +475,184 @@ function Dashboard() {
 
       <div className="row g-4 mt-1">
 
-        {/* SHOP OUTSTANDING */}
+        {/* SHOP OUTSTANDING (dues only) */}
 
-        <div className="col-md-6">
-
+        <div className="col-md-3">
           <div className="card shadow-sm h-100">
-
             <div className="card-body">
-
-              <h6 className="text-muted">
-                Shop Outstanding
-              </h6>
-
-              <h3>
-                ₹
-                {shopOutstanding.toLocaleString(
-                  "en-IN"
-                )}
+              <h6 className="text-muted">Shop Outstanding</h6>
+              <h3 className="text-danger">
+                ₹{shopOutstanding.toLocaleString("en-IN")}
               </h3>
-
               <p className="mb-0 text-muted">
                 Amount receivable from shops
               </p>
-
             </div>
-
           </div>
-
         </div>
 
-        {/* DISTRIBUTOR PAYABLE */}
+        {/* SHOP ADVANCE */}
 
-        <div className="col-md-6">
-
+        <div className="col-md-3">
           <div className="card shadow-sm h-100">
-
             <div className="card-body">
-
-              <h6 className="text-muted">
-                Distributor Payable
-              </h6>
-
-              <h3>
-                ₹
-                {distributorPayable.toLocaleString(
-                  "en-IN"
-                )}
+              <h6 className="text-muted">Advance from Shops</h6>
+              <h3 className="text-success">
+                ₹{shopAdvance.toLocaleString("en-IN")}
               </h3>
+              <p className="mb-0 text-muted">
+                Paid by shops in advance
+              </p>
+            </div>
+          </div>
+        </div>
 
+        {/* DISTRIBUTOR PAYABLE (dues only) */}
+
+        <div className="col-md-3">
+          <div className="card shadow-sm h-100">
+            <div className="card-body">
+              <h6 className="text-muted">Distributor Payable</h6>
+              <h3 className="text-danger">
+                ₹{distributorPayable.toLocaleString("en-IN")}
+              </h3>
               <p className="mb-0 text-muted">
                 Amount payable to distributors
               </p>
-
             </div>
-
           </div>
+        </div>
 
+        {/* DISTRIBUTOR ADVANCE */}
+
+        <div className="col-md-3">
+          <div className="card shadow-sm h-100">
+            <div className="card-body">
+              <h6 className="text-muted">
+                Advance to Distributors
+              </h6>
+              <h3 className="text-success">
+                ₹{distributorAdvance.toLocaleString("en-IN")}
+              </h3>
+              <p className="mb-0 text-muted">
+                Paid to distributors in advance
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ================================= */}
+      {/* THIS MONTH / LOW STOCK / TOP DUES */}
+      {/* ================================= */}
+
+      <div className="row g-4 mt-1">
+
+        <div className="col-md-4">
+          <div className="card shadow-sm h-100">
+            <div className="card-body">
+              <h6 className="text-muted">This Month</h6>
+
+              <div className="d-flex justify-content-between">
+                <span>Sales</span>
+                <strong>₹{monthSales.toLocaleString("en-IN")}</strong>
+              </div>
+
+              <div className="d-flex justify-content-between">
+                <span>Purchases</span>
+                <strong>
+                  ₹{monthPurchases.toLocaleString("en-IN")}
+                </strong>
+              </div>
+
+              <hr className="my-2" />
+
+              <div className="d-flex justify-content-between">
+                <span>Sales - Purchases</span>
+                <strong
+                  className={
+                    monthSales - monthPurchases < 0
+                      ? "text-danger"
+                      : "text-success"
+                  }
+                >
+                  {monthSales - monthPurchases < 0 ? "-" : ""}₹
+                  {Math.abs(monthSales - monthPurchases).toLocaleString(
+                    "en-IN"
+                  )}
+                </strong>
+              </div>
+
+              <small className="text-muted">
+                Stock bought is not always sold in the same month,
+                so see Business Summary for real profit.
+              </small>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="card shadow-sm h-100">
+            <div className="card-body">
+              <h6 className="text-muted">
+                Low Stock (under {LOW_STOCK_KG} kg)
+              </h6>
+
+              {lowStock.length === 0 ? (
+                <p className="mb-0 text-success">
+                  All products have enough stock.
+                </p>
+              ) : (
+                lowStock.map((item) => (
+                  <div
+                    key={item.product}
+                    className="d-flex justify-content-between"
+                  >
+                    <span>
+                      {item.name}
+                      {item.brand ? ` - ${item.brand}` : ""}
+                    </span>
+                    <strong
+                      className={
+                        item.quantity <= 0 ? "text-danger" : "text-warning"
+                      }
+                    >
+                      {Number(item.quantity).toLocaleString("en-IN")} kg
+                    </strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="card shadow-sm h-100">
+            <div className="card-body">
+              <h6 className="text-muted">
+                Shops Owing the Most
+              </h6>
+
+              {shopDues.length === 0 ? (
+                <p className="mb-0 text-success">
+                  No shop has an outstanding amount.
+                </p>
+              ) : (
+                shopDues.map((shop, index) => (
+                  <div
+                    key={index}
+                    className="d-flex justify-content-between"
+                  >
+                    <span>{shop.name}</span>
+                    <strong className="text-danger">
+                      ₹{shop.due.toLocaleString("en-IN")}
+                    </strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
 
       </div>

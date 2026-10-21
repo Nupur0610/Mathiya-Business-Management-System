@@ -1,8 +1,22 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+  indiaDate,
+} from "../components/EditTools";
 
 function Purchases() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [editingReceipt, setEditingReceipt] = useState(null);
   const [orders, setOrders] = useState([]);
   const [receipts, setReceipts] = useState([]);
   const [distributors, setDistributors] = useState([]);
@@ -398,6 +412,67 @@ function Purchases() {
       </div>
 
       {/* ERROR */}
+
+      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Purchase Order"
+          path="/purchase-orders"
+          record={editing}
+          fields={[
+            {
+              name: "distributor",
+              label: "Distributor",
+              type: "select",
+              required: true,
+              options: distributors.map((x) => ({ value: x._id, label: x.name })),
+            },
+            { name: "orderDate", label: "Order date", type: "date", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            distributor: editing.distributor?._id || "",
+            orderDate: indiaDate(editing.orderDate),
+            notes: editing.notes || "",
+          }}
+          itemsConfig={{ products, qtyKey: "quantity", qtyLabel: "Quantity (kg)" }}
+          initialItems={editing.items.map((i) => ({
+            product: i.product?._id || "",
+            quantity: i.quantity,
+            pricePerKg: i.pricePerKg,
+          }))}
+          onSaved={fetchData}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {editingReceipt && (
+        <EditModal
+          title="Edit Purchase Receipt"
+          path="/purchase-receipts"
+          record={editingReceipt}
+          fields={[
+            { name: "receivedAt", label: "Received date", type: "date", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            receivedAt: indiaDate(editingReceipt.receivedAt),
+            notes: editingReceipt.notes || "",
+          }}
+          itemsConfig={{ products, qtyKey: "quantityReceived", qtyLabel: "Received (kg)" }}
+          initialItems={editingReceipt.items.map((i) => ({
+            product: i.product?._id || "",
+            quantityReceived: i.quantityReceived,
+            pricePerKg: i.pricePerKg,
+          }))}
+          onSaved={fetchData}
+          onClose={() => setEditingReceipt(null)}
+        />
+      )}
 
       {error && (
         <div className="alert alert-danger">
@@ -816,18 +891,19 @@ function Purchases() {
                     <th>Total</th>
                     <th>Status</th>
                     <th>Action</th>
-                  </tr>
+                  <ActionsHeader editMode={editMode} />
+</tr>
 
                 </thead>
 
                 <tbody>
 
-                  {orders.length === 0 ? (
+                  {orders.filter(matchesSearch(search)).length === 0 ? (
 
                     <tr>
 
                       <td
-                        colSpan="9"
+                        colSpan={editMode ? 10 : 9}
                         className="text-center py-4 text-muted"
                       >
                         No purchase orders found.
@@ -837,36 +913,40 @@ function Purchases() {
 
                   ) : (
 
-                    orders.map(
+                    orders.filter(matchesSearch(search)).map(
                       (order) => {
 
-                        const item =
-                          order.items?.[0];
-
-                        const ordered =
-                          Number(
-                            item?.quantity || 0
-                          );
-
-                        const received =
-                          getReceivedQuantity(
+                        // An order can hold several products: show every one of them
+                        const lines = (order.items || []).map((line) => {
+                          const lineOrdered = Number(line.quantity || 0);
+                          const lineReceived = getReceivedQuantity(
                             order._id,
-                            item?.product?._id
+                            line.product?._id
                           );
 
-                        const remaining =
-                          Math.max(
-                            ordered -
-                              received,
-                            0
-                          );
-
-                        const total =
-                          ordered *
-                          Number(
-                            item?.pricePerKg ||
+                          return {
+                            line,
+                            lineOrdered,
+                            lineReceived,
+                            lineRemaining: Math.max(
+                              lineOrdered - lineReceived,
                               0
-                          );
+                            ),
+                            lineTotal:
+                              lineOrdered *
+                              Number(line.pricePerKg || 0),
+                          };
+                        });
+
+                        const remaining = lines.reduce(
+                          (sum, l) => sum + l.lineRemaining,
+                          0
+                        );
+
+                        const total = lines.reduce(
+                          (sum, l) => sum + l.lineTotal,
+                          0
+                        );
 
                         return (
                           <tr
@@ -886,42 +966,39 @@ function Purchases() {
                             </td>
 
                             <td>
-
-                              {
-                                item?.product
-                                  ?.name
-                              }
-
-                              <small className="text-muted d-block">
-                                {
-                                  item?.product
-                                    ?.brand
-                                }
-                              </small>
-
-                            </td>
+  {lines.map((l, i) => (
+    <div key={i} className={i > 0 ? "mt-1" : ""}>
+      {l.line.product?.name}
+      <small className="text-muted d-block">
+        {l.line.product?.brand}
+      </small>
+    </div>
+  ))}
+</td>
 
                             <td>
-                              {ordered} kg
-                            </td>
+  {lines.map((l, i) => (
+    <div key={i} className={i > 0 ? "mt-3" : ""}>{l.lineOrdered} kg</div>
+  ))}
+</td>
 
                             <td>
-                              <strong>
-                                {received} kg
-                              </strong>
-                            </td>
+  {lines.map((l, i) => (
+    <div key={i} className={i > 0 ? "mt-3" : ""}><strong>{l.lineReceived} kg</strong></div>
+  ))}
+</td>
 
                             <td>
-                              {remaining} kg
-                            </td>
+  {lines.map((l, i) => (
+    <div key={i} className={i > 0 ? "mt-3" : ""}>{l.lineRemaining} kg</div>
+  ))}
+</td>
 
                             <td>
-                              ₹
-                              {
-                                item?.pricePerKg ||
-                                  0
-                              }
-                            </td>
+  {lines.map((l, i) => (
+    <div key={i} className={i > 0 ? "mt-3" : ""}>₹{l.line.pricePerKg || 0}</div>
+  ))}
+</td>
 
                             <td>
                               <strong>
@@ -977,7 +1054,14 @@ function Purchases() {
 
                             </td>
 
-                          </tr>
+                          <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(order)}
+  onDelete={() =>
+    deleteEntry({ path: "/purchase-orders", id: order._id, label: "purchase order", onDone: fetchData })
+  }
+/>
+</tr>
                         );
                       }
                     )
@@ -1029,18 +1113,19 @@ function Purchases() {
                   <th>Price / kg</th>
                   <th>Date</th>
                   <th>Notes</th>
-                </tr>
+                <ActionsHeader editMode={editMode} />
+</tr>
 
               </thead>
 
               <tbody>
 
-                {receipts.length === 0 ? (
+                {receipts.filter(matchesSearch(search)).length === 0 ? (
 
                   <tr>
 
                     <td
-                      colSpan="6"
+                      colSpan={editMode ? 7 : 6}
                       className="text-center py-4 text-muted"
                     >
                       No purchase receipts found.
@@ -1050,7 +1135,7 @@ function Purchases() {
 
                 ) : (
 
-                  receipts.map(
+                  receipts.filter(matchesSearch(search)).map(
                     (receipt) => {
 
                       const item =
@@ -1118,7 +1203,14 @@ function Purchases() {
                             }
                           </td>
 
-                        </tr>
+                        <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditingReceipt(receipt)}
+  onDelete={() =>
+    deleteEntry({ path: "/purchase-receipts", id: receipt._id, label: "purchase receipt", onDone: fetchData })
+  }
+/>
+</tr>
                       );
                     }
                   )

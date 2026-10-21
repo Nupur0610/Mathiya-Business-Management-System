@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+  indiaDate,
+} from "../components/EditTools";
 
 function ShopOrders() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
   const [orders, setOrders] = useState([]);
   const [deliveries, setDeliveries] = useState([]);
   const [shops, setShops] = useState([]);
@@ -309,6 +322,43 @@ function ShopOrders() {
       </div>
 
       {/* Error */}
+      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Shop Order"
+          path="/shop-orders"
+          record={editing}
+          fields={[
+            {
+              name: "shop",
+              label: "Shop",
+              type: "select",
+              required: true,
+              options: shops.map((x) => ({ value: x._id, label: x.name })),
+            },
+            { name: "orderDate", label: "Order date", type: "date", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            shop: editing.shop?._id || "",
+            orderDate: indiaDate(editing.orderDate),
+            notes: editing.notes || "",
+          }}
+          itemsConfig={{ products, qtyKey: "quantity", qtyLabel: "Quantity (kg)" }}
+          initialItems={editing.items.map((i) => ({
+            product: i.product?._id || "",
+            quantity: i.quantity,
+            pricePerKg: i.pricePerKg,
+          }))}
+          onSaved={() => Promise.all([fetchOrders(), fetchDeliveries()])}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
       {error && (
         <div className="alert alert-danger">
           {error}
@@ -513,11 +563,12 @@ function ShopOrders() {
                     <th>Total</th>
                     <th>Order Date</th>
                     <th>Status</th>
-                  </tr>
+                  <ActionsHeader editMode={editMode} />
+</tr>
                 </thead>
 
                 <tbody>
-                  {orders.map((order) => {
+                  {orders.filter(matchesSearch(search)).map((order) => {
                     const totalQuantity =
                       order.items.reduce(
                         (total, item) =>
@@ -599,7 +650,14 @@ function ShopOrders() {
                           </span>
                         </td>
 
-                      </tr>
+                      <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(order)}
+  onDelete={() =>
+    deleteEntry({ path: "/shop-orders", id: order._id, label: "shop order", onDone: () => Promise.all([fetchOrders(), fetchDeliveries()]) })
+  }
+/>
+</tr>
                     );
                   })}
                 </tbody>

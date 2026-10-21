@@ -103,8 +103,31 @@ const getDailyBalances = async (req, res) => {
   }
 };
 
+
+const deleteDailyBalance = async (req, res) => {
+  try {
+    const record = await DailyBalance.findByIdAndDelete(req.params.id);
+
+    if (!record) {
+      return res.status(404).json({
+        message: "Daily balance not found.",
+      });
+    }
+
+    res.status(200).json({ message: "Daily balance deleted." });
+  } catch (error) {
+    console.error("Delete daily balance error:", error);
+
+    res.status(500).json({
+      message: "Failed to delete daily balance.",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   saveDailyBalance,
   getDailyBalance,
   getDailyBalances,
+  deleteDailyBalance,
 };

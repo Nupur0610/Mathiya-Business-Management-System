@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+  indiaDate,
+} from "../components/EditTools";
 
 function Deliveries() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
   const [deliveries, setDeliveries] = useState([]);
   const [shopOrders, setShopOrders] = useState([]);
 
@@ -358,6 +371,51 @@ function Deliveries() {
       </div>
 
       {/* Error */}
+      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title={`Edit Delivery - ${editing.shop?.name || ""}`}
+          path="/deliveries"
+          record={editing}
+          fields={[
+            { name: "deliveredAt", label: "Delivery date", type: "date", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            deliveredAt: indiaDate(editing.deliveredAt),
+            notes: editing.notes || "",
+          }}
+          itemsConfig={{
+            products: (() => {
+              const order = shopOrders.find(
+                (o) => o._id === editing.shopOrder?._id
+              );
+              const list = [
+                ...(order?.items || []).map((i) => i.product),
+                ...(editing.items || []).map((i) => i.product),
+              ].filter(Boolean);
+              return list.filter(
+                (item, index) =>
+                  list.findIndex((x) => x._id === item._id) === index
+              );
+            })(),
+            qtyKey: "quantityDelivered",
+            qtyLabel: "Delivered (kg)",
+          }}
+          initialItems={editing.items.map((i) => ({
+            product: i.product?._id || "",
+            quantityDelivered: i.quantityDelivered,
+            pricePerKg: i.pricePerKg,
+          }))}
+          onSaved={() => Promise.all([fetchDeliveries(), fetchShopOrders()])}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
       {error && (
         <div className="alert alert-danger">
           {error}
@@ -692,12 +750,13 @@ function Deliveries() {
                     <th>Price / kg</th>
                     <th>Delivered At</th>
                     <th>Notes</th>
-                  </tr>
+                  <ActionsHeader editMode={editMode} />
+</tr>
                 </thead>
 
                 <tbody>
 
-                  {deliveries.map(
+                  {deliveries.filter(matchesSearch(search)).map(
                     (delivery) => (
                       <tr
                         key={delivery._id}
@@ -818,7 +877,14 @@ function Deliveries() {
                           )}
                         </td>
 
-                      </tr>
+                      <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(delivery)}
+  onDelete={() =>
+    deleteEntry({ path: "/deliveries", id: delivery._id, label: "delivery", onDone: () => Promise.all([fetchDeliveries(), fetchShopOrders()]) })
+  }
+/>
+</tr>
                     )
                   )}
 

@@ -83,6 +83,10 @@ const getShopOutstanding = async (shopId) => {
     totalSalesReturnValue,
     totalPaymentsReceived,
     outstanding,
+    // Advance = the shop paid more than it owes. Kept separate so it
+    // never cancels out another shop's dues in the totals.
+    due: Math.max(outstanding, 0),
+    advance: Math.max(-outstanding, 0),
   };
 };
 
@@ -165,6 +169,9 @@ const getDistributorOutstanding = async (distributorId) => {
     totalPurchaseReturnValue,
     totalPaymentsMade,
     outstanding,
+    // Advance = we paid the distributor more than we owe.
+    due: Math.max(outstanding, 0),
+    advance: Math.max(-outstanding, 0),
   };
 };
 

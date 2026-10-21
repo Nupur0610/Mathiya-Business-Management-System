@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  indiaDate,
+} from "../components/EditTools";
 
 function StockAdjustments() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [products, setProducts] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
 
@@ -115,6 +125,55 @@ function StockAdjustments() {
           the system quantity.
         </p>
       </div>
+
+      <div className="d-flex justify-content-end mb-3">
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Stock Adjustment"
+          path="/stock-adjustments"
+          record={editing}
+          fields={[
+            {
+              name: "product",
+              label: "Product",
+              type: "select",
+              required: true,
+              options: products.map((p) => ({
+                value: p._id,
+                label: `${p.name}${p.brand ? " - " + p.brand : ""}`,
+              })),
+            },
+            {
+              name: "type",
+              label: "Type",
+              type: "select",
+              required: true,
+              options: [
+                { value: "increase", label: "Increase" },
+                { value: "decrease", label: "Decrease" },
+              ],
+            },
+            { name: "quantity", label: "Quantity (kg)", type: "number", required: true },
+            { name: "adjustmentDate", label: "Date", type: "date", required: true },
+            { name: "reason", label: "Reason", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            product: editing.product?._id || "",
+            type: editing.type,
+            quantity: editing.quantity,
+            adjustmentDate: indiaDate(editing.adjustmentDate),
+            reason: editing.reason || "",
+            notes: editing.notes || "",
+          }}
+          transform={(v) => ({ ...v, quantity: Number(v.quantity) })}
+          onSaved={fetchData}
+          onClose={() => setEditing(null)}
+        />
+      )}
 
       {message && (
         <div className="alert alert-success">
@@ -357,7 +416,8 @@ function StockAdjustments() {
                         <th>Quantity</th>
                         <th>Reason</th>
                         <th>Notes</th>
-                      </tr>
+                      <ActionsHeader editMode={editMode} />
+</tr>
                     </thead>
 
                     <tbody>
@@ -402,7 +462,14 @@ function StockAdjustments() {
                           <td>
                             {item.notes || "-"}
                           </td>
-                        </tr>
+                        <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(item)}
+  onDelete={() =>
+    deleteEntry({ path: "/stock-adjustments", id: item._id, label: "stock adjustment", onDone: fetchData })
+  }
+/>
+</tr>
                       ))}
                     </tbody>
                   </table>

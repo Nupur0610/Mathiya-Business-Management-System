@@ -203,7 +203,228 @@ const getPurchaseReceipts = async (req, res) => {
   }
 };
 
+
+const {
+  deleteStockTransactionsByReference,
+  assertStockNotNegative,
+} = require("../services/stockService");
+const {
+  computeOrderStatus,
+  sumByProduct,
+} = require("../services/orderStatus");
+const {
+  assertDistributorReturnsValid,
+} = require("../services/integrityService");
+
+const recomputePurchaseOrderStatus = async (orderId, session) => {
+  const order = await PurchaseOrder.findById(orderId).session(session);
+
+  if (!order) {
+    return;
+  }
+
+  const receipts = await PurchaseReceipt.find({
+    purchaseOrder: orderId,
+  }).session(session);
+
+  order.status = computeOrderStatus(
+    order.items,
+    receipts.flatMap((r) => r.items),
+    "quantityReceived",
+    order.status
+  );
+
+  await order.save({ session });
+};
+
+const updatePurchaseReceipt = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { items, receivedAt, notes } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error("Purchase receipt must contain at least one item");
+    }
+
+    for (const item of items) {
+      if (!item.product) {
+        throw new Error("Product is required for every item");
+      }
+
+      if (!(Number(item.quantityReceived) > 0)) {
+        throw new Error("Received quantity must be greater than 0");
+      }
+
+      if (
+        item.pricePerKg === undefined ||
+        !(Number(item.pricePerKg) >= 0)
+      ) {
+        throw new Error("A valid price per kg is required for every item");
+      }
+    }
+
+    session.startTransaction();
+
+    const receipt = await PurchaseReceipt.findById(req.params.id).session(
+      session
+    );
+
+    if (!receipt) {
+      throw new Error("Purchase receipt not found");
+    }
+
+    const order = await PurchaseOrder.findById(
+      receipt.purchaseOrder
+    ).session(session);
+
+    if (!order) {
+      throw new Error("Purchase order not found");
+    }
+
+    const otherReceipts = await PurchaseReceipt.find({
+      purchaseOrder: receipt.purchaseOrder,
+      _id: { $ne: receipt._id },
+    }).session(session);
+
+    const orderedTotals = sumByProduct(order.items, "quantity");
+    const alreadyReceived = sumByProduct(
+      otherReceipts.flatMap((r) => r.items),
+      "quantityReceived"
+    );
+    const newTotals = sumByProduct(items, "quantityReceived");
+
+    for (const [productId, qty] of Object.entries(newTotals)) {
+      if (orderedTotals[productId] === undefined) {
+        throw new Error(
+          "A product in this receipt is not in the purchase order"
+        );
+      }
+
+      const remaining =
+        orderedTotals[productId] - (alreadyReceived[productId] || 0);
+
+      if (qty > remaining + 0.0001) {
+        throw new Error(
+          `Cannot receive ${qty} kg. Only ${remaining} kg of this product is left on the order.`
+        );
+      }
+    }
+
+    const oldProducts = receipt.items.map((item) => item.product);
+
+    receipt.items = items.map((item) => ({
+      product: item.product,
+      quantityReceived: Number(item.quantityReceived),
+      pricePerKg: Number(item.pricePerKg),
+    }));
+    if (receivedAt) receipt.receivedAt = receivedAt;
+    receipt.notes = notes;
+
+    await receipt.save({ session });
+
+    await deleteStockTransactionsByReference(
+      "PurchaseReceipt",
+      receipt._id,
+      session
+    );
+
+    for (const item of receipt.items) {
+      await createStockTransaction({
+        product: item.product,
+        type: "PURCHASE_RECEIPT",
+        quantity: item.quantityReceived,
+        referenceType: "PurchaseReceipt",
+        referenceId: receipt._id,
+        transactionDate: receipt.receivedAt,
+        notes: `Stock received through purchase receipt ${receipt._id}`,
+        session,
+      });
+    }
+
+    await assertStockNotNegative(
+      [...oldProducts, ...receipt.items.map((item) => item.product)],
+      session
+    );
+
+    await assertDistributorReturnsValid(receipt.distributor, session);
+
+    await recomputePurchaseOrderStatus(order._id, session);
+
+    await session.commitTransaction();
+
+    const populated = await PurchaseReceipt.findById(receipt._id)
+      .populate("purchaseOrder")
+      .populate("distributor")
+      .populate("items.product");
+
+    res.status(200).json({
+      message: "Purchase receipt updated successfully",
+      receipt: populated,
+    });
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    console.error("Update purchase receipt error:", error);
+
+    res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const deletePurchaseReceipt = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const receipt = await PurchaseReceipt.findById(req.params.id).session(
+      session
+    );
+
+    if (!receipt) {
+      throw new Error("Purchase receipt not found");
+    }
+
+    await deleteStockTransactionsByReference(
+      "PurchaseReceipt",
+      receipt._id,
+      session
+    );
+
+    await PurchaseReceipt.deleteOne({ _id: receipt._id }, { session });
+
+    await assertStockNotNegative(
+      receipt.items.map((item) => item.product),
+      session
+    );
+
+    await assertDistributorReturnsValid(receipt.distributor, session);
+
+    await recomputePurchaseOrderStatus(receipt.purchaseOrder, session);
+
+    await session.commitTransaction();
+
+    res.status(200).json({ message: "Purchase receipt deleted successfully" });
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    console.error("Delete purchase receipt error:", error);
+
+    res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
 module.exports = {
   createPurchaseReceipt,
   getPurchaseReceipts,
+  updatePurchaseReceipt,
+  deletePurchaseReceipt,
 };

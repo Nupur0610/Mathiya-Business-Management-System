@@ -209,7 +209,208 @@ const getOpeningBalances = async (req, res) => {
   }
 };
 
+
+const {
+  deleteStockTransactionsByReference,
+  assertStockNotNegative,
+} = require("../services/stockService");
+
+const updateOpeningBalance = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const {
+      type,
+      shop,
+      distributor,
+      product,
+      quantity,
+      amount,
+      asOfDate,
+      notes,
+    } = req.body;
+
+    const allowedTypes = [
+      "cash",
+      "gpay",
+      "stock",
+      "shop_receivable",
+      "distributor_payable",
+    ];
+
+    if (!type || !asOfDate) {
+      return res.status(400).json({
+        message: "type and asOfDate are required.",
+      });
+    }
+
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({
+        message: "Invalid opening balance type.",
+      });
+    }
+
+    if (type === "stock") {
+      if (!product) {
+        return res.status(400).json({
+          message: "Product is required for opening stock.",
+        });
+      }
+
+      if (quantity === undefined || Number(quantity) <= 0) {
+        return res.status(400).json({
+          message: "Opening stock quantity must be greater than 0.",
+        });
+      }
+    } else if (amount === undefined || Number(amount) < 0) {
+      return res.status(400).json({
+        message: "A valid amount is required.",
+      });
+    }
+
+    if (type === "shop_receivable" && !shop) {
+      return res.status(400).json({
+        message: "Shop is required for shop receivable.",
+      });
+    }
+
+    if (type === "distributor_payable" && !distributor) {
+      return res.status(400).json({
+        message: "Distributor is required for distributor payable.",
+      });
+    }
+
+    session.startTransaction();
+
+    const record = await OpeningBalance.findById(req.params.id).session(
+      session
+    );
+
+    if (!record) {
+      throw new Error("Opening balance not found.");
+    }
+
+    if (type === "stock") {
+      if (!(await Product.findById(product).session(session))) {
+        throw new Error("Product not found.");
+      }
+    }
+
+    if (type === "shop_receivable") {
+      if (!(await Shop.findById(shop).session(session))) {
+        throw new Error("Shop not found.");
+      }
+    }
+
+    if (type === "distributor_payable") {
+      if (!(await Distributor.findById(distributor).session(session))) {
+        throw new Error("Distributor not found.");
+      }
+    }
+
+    const oldProduct = record.product;
+
+    record.type = type;
+    record.shop = type === "shop_receivable" ? shop : undefined;
+    record.distributor =
+      type === "distributor_payable" ? distributor : undefined;
+    record.product = type === "stock" ? product : undefined;
+    record.quantity = type === "stock" ? Number(quantity) : undefined;
+    record.amount = type === "stock" ? undefined : Number(amount);
+    record.asOfDate = asOfDate;
+    record.notes = notes;
+
+    await record.save({ session });
+
+    // Opening stock is also a stock transaction: rebuild it
+    await deleteStockTransactionsByReference(
+      "OpeningBalance",
+      record._id,
+      session
+    );
+
+    if (type === "stock") {
+      await createStockTransaction({
+        product,
+        type: "ADJUSTMENT_IN",
+        quantity: Number(quantity),
+        referenceType: "OpeningBalance",
+        referenceId: record._id,
+        transactionDate: asOfDate,
+        notes: `Opening stock for ${record._id}`,
+        session,
+      });
+    }
+
+    await assertStockNotNegative([oldProduct, product], session);
+
+    await session.commitTransaction();
+
+    const populated = await OpeningBalance.findById(record._id)
+      .populate("product")
+      .populate("shop")
+      .populate("distributor");
+
+    res.status(200).json({
+      message: "Opening balance updated.",
+      openingBalance: populated,
+    });
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    console.error("Update opening balance error:", error);
+
+    res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const deleteOpeningBalance = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const record = await OpeningBalance.findById(req.params.id).session(
+      session
+    );
+
+    if (!record) {
+      throw new Error("Opening balance not found.");
+    }
+
+    await deleteStockTransactionsByReference(
+      "OpeningBalance",
+      record._id,
+      session
+    );
+
+    await OpeningBalance.deleteOne({ _id: record._id }, { session });
+
+    await assertStockNotNegative([record.product], session);
+
+    await session.commitTransaction();
+
+    res.status(200).json({ message: "Opening balance deleted." });
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    console.error("Delete opening balance error:", error);
+
+    res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
 module.exports = {
   createOpeningBalance,
   getOpeningBalances,
+  updateOpeningBalance,
+  deleteOpeningBalance,
 };

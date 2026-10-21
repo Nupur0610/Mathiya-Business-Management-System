@@ -110,7 +110,101 @@ const getPayments = async (req, res) => {
   }
 };
 
+
+const updatePayment = async (req, res) => {
+  try {
+    const {
+      partyType,
+      shop,
+      distributor,
+      amount,
+      paymentMethod,
+      paymentDate,
+      reference,
+      notes,
+    } = req.body;
+
+    if (!partyType || !amount || !paymentMethod) {
+      return res.status(400).json({
+        message: "partyType, amount and paymentMethod are required.",
+      });
+    }
+
+    if (Number(amount) <= 0) {
+      return res.status(400).json({
+        message: "Amount must be greater than 0.",
+      });
+    }
+
+    if (partyType === "shop") {
+      if (!shop || !(await Shop.findById(shop))) {
+        return res.status(400).json({ message: "Valid shop is required." });
+      }
+    } else if (partyType === "distributor") {
+      if (!distributor || !(await Distributor.findById(distributor))) {
+        return res
+          .status(400)
+          .json({ message: "Valid distributor is required." });
+      }
+    } else {
+      return res.status(400).json({ message: "Invalid party type." });
+    }
+
+    const payment = await Payment.findById(req.params.id);
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found." });
+    }
+
+    payment.partyType = partyType;
+    payment.shop = partyType === "shop" ? shop : undefined;
+    payment.distributor =
+      partyType === "distributor" ? distributor : undefined;
+    payment.amount = Number(amount);
+    payment.paymentMethod = paymentMethod;
+    if (paymentDate) payment.paymentDate = paymentDate;
+    payment.reference = reference;
+    payment.notes = notes;
+
+    await payment.save();
+
+    const populated = await Payment.findById(payment._id)
+      .populate("shop")
+      .populate("distributor");
+
+    res.status(200).json(populated);
+  } catch (error) {
+    console.error("Update payment error:", error);
+
+    res.status(500).json({
+      message: "Failed to update payment.",
+      error: error.message,
+    });
+  }
+};
+
+const deletePayment = async (req, res) => {
+  try {
+    const payment = await Payment.findByIdAndDelete(req.params.id);
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found." });
+    }
+
+    res.status(200).json({ message: "Payment deleted." });
+  } catch (error) {
+    console.error("Delete payment error:", error);
+
+    res.status(500).json({
+      message: "Failed to delete payment.",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createPayment,
   getPayments,
+  updatePayment,
+  deletePayment,
 };

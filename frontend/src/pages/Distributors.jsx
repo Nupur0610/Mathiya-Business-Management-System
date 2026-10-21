@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+} from "../components/EditTools";
 
 function Distributors() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
 const [distributors, setDistributors] = useState([]);
 
 const [loading, setLoading] = useState(true);
@@ -219,7 +231,32 @@ return ( <div className="container py-4">
 
   {/* ERROR */}
 
-  {error && (
+  <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Distributor"
+          path="/distributors"
+          record={editing}
+          fields={[
+            { name: "name", label: "Distributor name", required: true },
+            { name: "phone", label: "Phone" },
+            { name: "address", label: "Address" },
+          ]}
+          initialValues={{
+            name: editing.name,
+            phone: editing.phone || "",
+            address: editing.address || "",
+          }}
+          onSaved={fetchDistributors}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {error && (
     <div className="alert alert-danger">
       {error}
     </div>
@@ -474,13 +511,14 @@ return ( <div className="container py-4">
                   Added
                 </th>
 
-              </tr>
+              <ActionsHeader editMode={editMode} />
+</tr>
 
             </thead>
 
             <tbody>
 
-              {distributors.map(
+              {distributors.filter(matchesSearch(search)).map(
                 (distributor) => (
 
                   <tr
@@ -535,7 +573,14 @@ return ( <div className="container py-4">
                       )}
                     </td>
 
-                  </tr>
+                  <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(distributor)}
+  onDelete={() =>
+    deleteEntry({ path: "/distributors", id: distributor._id, label: "distributor", onDone: fetchDistributors })
+  }
+/>
+</tr>
 
                 )
               )}

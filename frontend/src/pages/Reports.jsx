@@ -142,14 +142,14 @@ function Reports() {
     const number = Number(value || 0);
 
     if (number > 0) {
-      return "Profit";
+      return "Net Inflow (received more than paid)";
     }
 
     if (number < 0) {
-      return "Loss";
+      return "Net Outflow (paid more than received)";
     }
 
-    return "No Profit / Loss";
+    return "Balanced";
   };
 
   if (loading) {
@@ -282,13 +282,13 @@ function Reports() {
           </h4>
 
           <div className="row g-3 mb-4">
-            {/* Overall Profit / Loss */}
+            {/* Net Cash Flow (Received - Paid) */}
 
             <div className="col-md-4">
               <div className="card border-0 shadow-sm h-100">
                 <div className="card-body">
                   <p className="text-muted mb-1">
-                    Overall Profit / Loss
+                    Net Cash Flow (Received - Paid)
                   </p>
 
                   <h3
@@ -437,7 +437,7 @@ function Reports() {
           <div className="card border-0 shadow-sm mb-4">
             <div className="card-body">
               <h5 className="fw-bold mb-3">
-                Day-wise Profit / Loss
+                Day-wise Net Cash Flow
               </h5>
 
               <div className="table-responsive">
@@ -452,7 +452,7 @@ function Reports() {
                         Paid to Distributors
                       </th>
                       <th className="text-end">
-                        Profit / Loss
+                        Net Cash Flow
                       </th>
                     </tr>
                   </thead>

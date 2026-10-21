@@ -16,6 +16,7 @@ import Payments from "./pages/Payments";
 import Shops from "./pages/Shops";
 import Distributors from "./pages/Distributors";
 import Reports from "./pages/Reports";
+import Summary from "./pages/Summary";
 import Returns from "./pages/Returns";
 import OpeningBalances from "./pages/OpeningBalances";
 import DailyBalance from "./pages/DailyBalance";
@@ -49,6 +50,7 @@ function App() {
           <Route path="/shops" element={<Shops />} />
           <Route path="/distributors" element={<Distributors />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/summary" element={<Summary />} />
           <Route path="/returns" element={<Returns />} />
           <Route path="/opening-balances" element={<OpeningBalances />}/>
           <Route path="/daily-balance" element={<DailyBalance />}/>

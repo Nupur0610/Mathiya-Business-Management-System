@@ -1,8 +1,21 @@
 
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+  indiaDate,
+} from "../components/EditTools";
 
 function Payments() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
   const getToday = () => {
     return new Date().toISOString().split("T")[0];
   };
@@ -395,14 +408,25 @@ function Payments() {
     distributorCashTotal +
     distributorGpayTotal;
 
+  // Money received from shops is money IN, money paid to
+  // distributors is money OUT, so the overall figure is the
+  // difference (net), not the sum.
   const cashTotal =
-    shopCashTotal + distributorCashTotal;
+    shopCashTotal - distributorCashTotal;
 
   const gpayTotal =
-    shopGpayTotal + distributorGpayTotal;
+    shopGpayTotal - distributorGpayTotal;
+
+  const formatNet = (value) =>
+    `${value < 0 ? "-" : ""}₹${Math.abs(value).toLocaleString(
+      "en-IN"
+    )}`;
+
+  const netClass = (value) =>
+    value < 0 ? "text-danger" : value > 0 ? "text-success" : "";
 
   const grandTotal =
-    cashTotal + gpayTotal;
+    shopGrandTotal - distributorGrandTotal;
 
   // ==============================
   // PARTY NAME
@@ -756,13 +780,14 @@ function Payments() {
                   <th>Reference</th>
                   <th>Notes</th>
 
-                </tr>
+                <ActionsHeader editMode={editMode} />
+</tr>
 
               </thead>
 
               <tbody>
 
-                {paymentList.map((payment) => (
+                {paymentList.filter(matchesSearch(search)).map((payment) => (
 
                   <tr key={payment._id}>
 
@@ -810,7 +835,14 @@ function Payments() {
                       {payment.notes || "-"}
                     </td>
 
-                  </tr>
+                  <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(payment)}
+  onDelete={() =>
+    deleteEntry({ path: "/payments", id: payment._id, label: "payment", onDone: fetchPayments })
+  }
+/>
+</tr>
 
                 ))}
 
@@ -872,6 +904,83 @@ function Payments() {
       </div>
 
       {/* ERROR */}
+
+      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Payment"
+          path="/payments"
+          record={editing}
+          fields={[
+            {
+              name: "partyType",
+              label: "Payment type",
+              type: "select",
+              required: true,
+              options: [
+                { value: "shop", label: "Received from shop" },
+                { value: "distributor", label: "Paid to distributor" },
+              ],
+            },
+            {
+              name: "shop",
+              label: "Shop",
+              type: "select",
+              required: true,
+              showIf: (v) => v.partyType === "shop",
+              options: shops.map((x) => ({ value: x._id, label: x.name })),
+            },
+            {
+              name: "distributor",
+              label: "Distributor",
+              type: "select",
+              required: true,
+              showIf: (v) => v.partyType === "distributor",
+              options: distributors.map((x) => ({ value: x._id, label: x.name })),
+            },
+            { name: "amount", label: "Amount (₹)", type: "number", required: true },
+            {
+              name: "paymentMethod",
+              label: "Payment method",
+              type: "select",
+              required: true,
+              options: [
+                { value: "cash", label: "Cash" },
+                { value: "gpay", label: "GPay" },
+              ],
+            },
+            { name: "paymentDate", label: "Date", type: "date", required: true },
+            { name: "reference", label: "Reference" },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            partyType: editing.partyType,
+            shop: editing.shop?._id || "",
+            distributor: editing.distributor?._id || "",
+            amount: editing.amount,
+            paymentMethod: editing.paymentMethod,
+            paymentDate: indiaDate(editing.paymentDate),
+            reference: editing.reference || "",
+            notes: editing.notes || "",
+          }}
+          transform={(v) => ({
+            partyType: v.partyType,
+            shop: v.partyType === "shop" ? v.shop : undefined,
+            distributor: v.partyType === "distributor" ? v.distributor : undefined,
+            amount: Number(v.amount),
+            paymentMethod: v.paymentMethod,
+            paymentDate: v.paymentDate,
+            reference: v.reference,
+            notes: v.notes,
+          })}
+          onSaved={fetchPayments}
+          onClose={() => setEditing(null)}
+        />
+      )}
 
       {error && (
         <div className="alert alert-danger">
@@ -1126,7 +1235,7 @@ function Payments() {
           </h4>
 
           <p className="text-muted">
-            Combined shop and distributor payments.
+            Money received from shops minus money paid to distributors.
           </p>
 
         </div>
@@ -1140,15 +1249,15 @@ function Payments() {
               <div className="card-body">
 
                 <p className="text-muted mb-1">
-                  Cash
+                  Cash (Net)
                 </p>
 
-                <h3 className="mb-0">
-                  ₹
-                  {cashTotal.toLocaleString(
-                    "en-IN"
-                  )}
-                </h3>
+                <h3 className={`mb-0 ${netClass(cashTotal)}`}>
+{formatNet(cashTotal)}
+</h3>
+<small className="text-muted">
+Received {formatNet(shopCashTotal)} · Paid {formatNet(distributorCashTotal)}
+</small>
 
               </div>
 
@@ -1163,15 +1272,15 @@ function Payments() {
               <div className="card-body">
 
                 <p className="text-muted mb-1">
-                  GPay
+                  GPay (Net)
                 </p>
 
-                <h3 className="mb-0">
-                  ₹
-                  {gpayTotal.toLocaleString(
-                    "en-IN"
-                  )}
-                </h3>
+                <h3 className={`mb-0 ${netClass(gpayTotal)}`}>
+{formatNet(gpayTotal)}
+</h3>
+<small className="text-muted">
+Received {formatNet(shopGpayTotal)} · Paid {formatNet(distributorGpayTotal)}
+</small>
 
               </div>
 
@@ -1186,15 +1295,15 @@ function Payments() {
               <div className="card-body">
 
                 <p className="text-muted mb-1">
-                  Total Payments
+                  Net Total
                 </p>
 
-                <h3 className="mb-0">
-                  ₹
-                  {grandTotal.toLocaleString(
-                    "en-IN"
-                  )}
-                </h3>
+                <h3 className={`mb-0 ${netClass(grandTotal)}`}>
+{formatNet(grandTotal)}
+</h3>
+<small className="text-muted">
+Received {formatNet(shopGrandTotal)} · Paid {formatNet(distributorGrandTotal)}
+</small>
 
               </div>
 

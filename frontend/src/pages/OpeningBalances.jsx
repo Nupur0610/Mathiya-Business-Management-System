@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  indiaDate,
+} from "../components/EditTools";
 
 function getTodayDate() {
   const date = new Date();
@@ -9,6 +17,8 @@ function getTodayDate() {
 }
 
 function OpeningBalances() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [balances, setBalances] = useState([]);
   const [products, setProducts] = useState([]);
   const [shops, setShops] = useState([]);
@@ -386,6 +396,98 @@ function OpeningBalances() {
       </div>
 
       {/* Alerts */}
+      <div className="d-flex justify-content-end mb-3">
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Opening Balance"
+          path="/opening-balances"
+          record={editing}
+          fields={[
+            {
+              name: "type",
+              label: "Type",
+              type: "select",
+              required: true,
+              options: [
+                { value: "cash", label: "Cash" },
+                { value: "gpay", label: "GPay" },
+                { value: "stock", label: "Stock" },
+                { value: "shop_receivable", label: "Shop Receivable" },
+                { value: "distributor_payable", label: "Distributor Payable" },
+              ],
+            },
+            {
+              name: "shop",
+              label: "Shop",
+              type: "select",
+              required: true,
+              showIf: (v) => v.type === "shop_receivable",
+              options: shops.map((x) => ({ value: x._id, label: x.name })),
+            },
+            {
+              name: "distributor",
+              label: "Distributor",
+              type: "select",
+              required: true,
+              showIf: (v) => v.type === "distributor_payable",
+              options: distributors.map((x) => ({ value: x._id, label: x.name })),
+            },
+            {
+              name: "product",
+              label: "Product",
+              type: "select",
+              required: true,
+              showIf: (v) => v.type === "stock",
+              options: products.map((x) => ({
+                value: x._id,
+                label: `${x.name}${x.brand ? " - " + x.brand : ""}`,
+              })),
+            },
+            {
+              name: "quantity",
+              label: "Quantity (kg)",
+              type: "number",
+              required: true,
+              showIf: (v) => v.type === "stock",
+            },
+            {
+              name: "amount",
+              label: "Amount (₹)",
+              type: "number",
+              required: true,
+              showIf: (v) => v.type !== "stock",
+            },
+            { name: "asOfDate", label: "As of date", type: "date", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            type: editing.type,
+            shop: editing.shop?._id || "",
+            distributor: editing.distributor?._id || "",
+            product: editing.product?._id || "",
+            quantity: editing.quantity ?? "",
+            amount: editing.amount ?? "",
+            asOfDate: indiaDate(editing.asOfDate),
+            notes: editing.notes || "",
+          }}
+          transform={(v) => ({
+            type: v.type,
+            shop: v.type === "shop_receivable" ? v.shop : undefined,
+            distributor: v.type === "distributor_payable" ? v.distributor : undefined,
+            product: v.type === "stock" ? v.product : undefined,
+            quantity: v.type === "stock" ? Number(v.quantity) : undefined,
+            amount: v.type === "stock" ? undefined : Number(v.amount),
+            asOfDate: v.asOfDate,
+            notes: v.notes,
+          })}
+          onSaved={loadData}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
       {message && (
         <div className="alert alert-success">
           {message}
@@ -655,14 +757,15 @@ function OpeningBalances() {
                   <th>Amount</th>
                   <th>Quantity</th>
                   <th>Notes</th>
-                </tr>
+                <ActionsHeader editMode={editMode} />
+</tr>
               </thead>
 
               <tbody>
                 {balances.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan={editMode ? 7 : 6}
                       className="text-center py-5 text-muted"
                     >
                       No opening balances have been added yet.
@@ -710,7 +813,14 @@ function OpeningBalances() {
                           {balance.notes || "-"}
                         </span>
                       </td>
-                    </tr>
+                    <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(balance)}
+  onDelete={() =>
+    deleteEntry({ path: "/opening-balances", id: balance._id, label: "opening balance", onDone: loadData })
+  }
+/>
+</tr>
                   ))
                 )}
               </tbody>

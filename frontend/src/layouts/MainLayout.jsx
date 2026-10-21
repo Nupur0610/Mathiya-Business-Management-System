@@ -107,6 +107,10 @@ function MainLayout() {
             Returns
           </NavLink>
 
+          <NavLink to="/summary" className={navClass}>
+            Business Summary
+          </NavLink>
+
           <NavLink to="/reports" className={navClass}>
             Reports
           </NavLink>

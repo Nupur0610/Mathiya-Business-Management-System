@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  SearchBox,
+  matchesSearch,
+} from "../components/EditTools";
 
 function Products() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState([]);
 
@@ -111,6 +123,26 @@ function Products() {
       </div>
 
       {/* ERROR */}
+      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <SearchBox value={search} onChange={setSearch} />
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Product"
+          path="/products"
+          record={editing}
+          fields={[
+            { name: "name", label: "Product name", required: true },
+            { name: "brand", label: "Brand", required: true },
+          ]}
+          initialValues={{ name: editing.name, brand: editing.brand }}
+          onSaved={fetchData}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
       {error && (
         <div className="alert alert-danger">
           {error}
@@ -243,13 +275,14 @@ function Products() {
                     <th>Brand</th>
                     <th>Unit</th>
                     <th>Current Stock</th>
-                  </tr>
+                  <ActionsHeader editMode={editMode} />
+</tr>
 
                 </thead>
 
                 <tbody>
 
-                  {products.length === 0 ? (
+                  {products.filter(matchesSearch(search)).length === 0 ? (
 
                     <tr>
 
@@ -264,7 +297,7 @@ function Products() {
 
                   ) : (
 
-                    products.map((product) => (
+                    products.filter(matchesSearch(search)).map((product) => (
 
                       <tr key={product._id}>
 
@@ -292,7 +325,14 @@ function Products() {
 
                         </td>
 
-                      </tr>
+                      <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(product)}
+  onDelete={() =>
+    deleteEntry({ path: "/products", id: product._id, label: "product", onDone: fetchData })
+  }
+/>
+</tr>
 
                     ))
 

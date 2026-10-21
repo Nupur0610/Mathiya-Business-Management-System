@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import {
+  EditToggle,
+  ActionsHeader,
+  ActionsCell,
+  EditModal,
+  deleteEntry,
+  indiaDate,
+} from "../components/EditTools";
 
 function CashTransactions() {
+  const [editMode, setEditMode] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [transactions, setTransactions] = useState([]);
 
   const [type, setType] = useState("personal_contribution");
@@ -98,6 +108,53 @@ function CashTransactions() {
           through business cash or GPay.
         </p>
       </div>
+
+      <div className="d-flex justify-content-end mb-3">
+        <EditToggle editMode={editMode} setEditMode={setEditMode} />
+      </div>
+
+{editing && (
+        <EditModal
+          title="Edit Cash Transaction"
+          path="/cash-transactions"
+          record={editing}
+          fields={[
+            {
+              name: "type",
+              label: "Type",
+              type: "select",
+              required: true,
+              options: [
+                { value: "personal_contribution", label: "Contribution (money added)" },
+                { value: "personal_withdrawal", label: "Withdrawal (money taken)" },
+              ],
+            },
+            {
+              name: "paymentMethod",
+              label: "Method",
+              type: "select",
+              required: true,
+              options: [
+                { value: "cash", label: "Cash" },
+                { value: "gpay", label: "GPay" },
+              ],
+            },
+            { name: "amount", label: "Amount (₹)", type: "number", required: true },
+            { name: "transactionDate", label: "Date", type: "date", required: true },
+            { name: "notes", label: "Notes", type: "textarea" },
+          ]}
+          initialValues={{
+            type: editing.type,
+            paymentMethod: editing.paymentMethod,
+            amount: editing.amount,
+            transactionDate: indiaDate(editing.transactionDate),
+            notes: editing.notes || "",
+          }}
+          transform={(v) => ({ ...v, amount: Number(v.amount) })}
+          onSaved={fetchTransactions}
+          onClose={() => setEditing(null)}
+        />
+      )}
 
       {message && (
         <div className="alert alert-success">
@@ -320,7 +377,8 @@ function CashTransactions() {
                         <th>Method</th>
                         <th>Amount</th>
                         <th>Notes</th>
-                      </tr>
+                      <ActionsHeader editMode={editMode} />
+</tr>
                     </thead>
 
                     <tbody>
@@ -361,7 +419,14 @@ function CashTransactions() {
                           <td>
                             {transaction.notes || "-"}
                           </td>
-                        </tr>
+                        <ActionsCell
+  editMode={editMode}
+  onEdit={() => setEditing(transaction)}
+  onDelete={() =>
+    deleteEntry({ path: "/cash-transactions", id: transaction._id, label: "transaction", onDone: fetchTransactions })
+  }
+/>
+</tr>
                       ))}
                     </tbody>
                   </table>
