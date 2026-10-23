@@ -37,11 +37,10 @@ function Deliveries() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedShopId, setSelectedShopId] = useState("");
   const [deliveryItems, setDeliveryItems] = useState([]);
 
   const [formData, setFormData] = useState({
-    shopOrder: "",
     deliveredAt: nowLocalInput(),
     notes: "",
   });
@@ -126,66 +125,69 @@ function Deliveries() {
   // -----------------------------------------
   // Handle Shop Order selection
   // -----------------------------------------
-  const handleOrderChange = (e) => {
-    const orderId = e.target.value;
+  const handleShopChange = (e) => {
+    const shopId = e.target.value;
 
     setError("");
     setSuccess("");
+    setSelectedShopId(shopId);
 
-    if (!orderId) {
-      setSelectedOrder(null);
+    if (!shopId) {
       setDeliveryItems([]);
-
-      setFormData((previous) => ({
-        ...previous,
-        shopOrder: "",
-      }));
-
       return;
     }
 
-    const order = shopOrders.find(
-      (item) => item._id === orderId
+    // Every pending product of every pending order of this shop,
+    // oldest order first
+    const rows = [];
+
+    [...shopOrders]
+      .filter(
+        (order) =>
+          order.shop?._id === shopId &&
+          (order.status === "pending" || order.status === "partial")
+      )
+      .sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate))
+      .forEach((order) => {
+        order.items.forEach((item) => {
+          const alreadyDelivered = getAlreadyDelivered(
+            order._id,
+            item.product._id
+          );
+
+          const remaining = Math.max(item.quantity - alreadyDelivered, 0);
+
+          if (remaining <= 0) {
+            return;
+          }
+
+          rows.push({
+            orderId: order._id,
+            orderDate: order.orderDate,
+            product: item.product._id,
+            productName: item.product.name,
+            brand: item.product.brand,
+            unit: unitOf(item.product),
+            orderedQuantity: item.quantity,
+            alreadyDelivered,
+            remainingQuantity: remaining,
+            quantityDelivered: "",
+            pricePerKg: item.pricePerKg,
+          });
+        });
+      });
+
+    setDeliveryItems(rows);
+  };
+
+  // Put the full remaining quantity in every row
+  const fillAllRemaining = () => {
+    setDeliveryItems((previous) =>
+      previous.map((item) => ({
+        ...item,
+        quantityDelivered: item.remainingQuantity,
+      }))
     );
-
-    if (!order) {
-      return;
-    }
-
-    setSelectedOrder(order);
-
-    setFormData((previous) => ({
-      ...previous,
-      shopOrder: orderId,
-    }));
-
-    // Build delivery items for every product
-    // in the selected shop order
-    const items = order.items.map((item) => {
-      const alreadyDelivered =
-        getAlreadyDelivered(
-          order._id,
-          item.product._id
-        );
-
-      const remaining =
-        item.quantity - alreadyDelivered;
-
-      return {
-        product: item.product._id,
-        productName: item.product.name,
-        brand: item.product.brand,
-        unit: unitOf(item.product),
-        orderedQuantity: item.quantity,
-        alreadyDelivered,
-        remainingQuantity:
-          Math.max(remaining, 0),
-        quantityDelivered: "",
-        pricePerKg: item.pricePerKg,
-      };
-    });
-
-    setDeliveryItems(items);
   };
 
   // -----------------------------------------
@@ -213,12 +215,11 @@ function Deliveries() {
   // -----------------------------------------
   const resetForm = () => {
     setFormData({
-      shopOrder: "",
       deliveredAt: nowLocalInput(),
       notes: "",
     });
 
-    setSelectedOrder(null);
+    setSelectedShopId("");
     setDeliveryItems([]);
 
     setShowForm(false);
@@ -233,40 +234,14 @@ function Deliveries() {
     setError("");
     setSuccess("");
 
-    if (!selectedOrder) {
-      setError("Please select a shop order.");
+    if (!selectedShopId) {
+      setError("Please select a shop.");
       return;
     }
 
-    // Only include products where
-    // the user entered a delivery quantity
-    const itemsToDeliver =
-      deliveryItems
-        .filter(
-          (item) =>
-            Number(item.quantityDelivered) > 0
-        )
-        .map((item) => ({
-          product: item.product,
-          quantityDelivered: Number(
-            item.quantityDelivered
-          ),
-          pricePerKg: Number(
-            item.pricePerKg
-          ),
-        }));
-
-    if (itemsToDeliver.length === 0) {
-      setError(
-        "Enter a delivery quantity for at least one product."
-      );
-      return;
-    }
-
-    // Frontend validation
+    // Validate every row first
     for (const item of deliveryItems) {
-      const quantity =
-        Number(item.quantityDelivered);
+      const quantity = Number(item.quantityDelivered || 0);
 
       if (quantity > item.remainingQuantity) {
         setError(
@@ -283,53 +258,88 @@ function Deliveries() {
       }
     }
 
-    if (!window.confirm("Save this entry?")) {
+    const filledRows = deliveryItems.filter(
+      (item) => Number(item.quantityDelivered) > 0
+    );
+
+    if (filledRows.length === 0) {
+      setError("Enter a delivery quantity for at least one product.");
       return;
     }
+
+    // One delivery per order (the app keeps each delivery tied to its order)
+    const byOrder = {};
+
+    filledRows.forEach((item) => {
+      if (!byOrder[item.orderId]) {
+        byOrder[item.orderId] = [];
+      }
+
+      byOrder[item.orderId].push({
+        product: item.product,
+        quantityDelivered: Number(item.quantityDelivered),
+        pricePerKg: Number(item.pricePerKg),
+      });
+    });
+
+    const shopName = shopOptions.find((x) => x._id === selectedShopId)?.name;
+
+    const summary = filledRows
+      .map(
+        (item) =>
+          `${item.productName} - ${item.quantityDelivered} ${item.unit || "kg"}`
+      )
+      .join("\n");
+
+    if (
+      !window.confirm(`Save this delivery for ${shopName}?\n\n${summary}`)
+    ) {
+      return;
+    }
+
+    let savedCount = 0;
 
     try {
       setFormLoading(true);
 
-      const deliveryData = {
-        shopOrder: selectedOrder._id,
-        shop: selectedOrder.shop._id,
-        items: itemsToDeliver,
-        deliveredAt: formData.deliveredAt
-          ? new Date(
-              formData.deliveredAt
-            ).toISOString()
-          : undefined,
-        notes: formData.notes,
-      };
+      for (const [orderId, items] of Object.entries(byOrder)) {
+        await axios.post(`${import.meta.env.VITE_API_URL}/deliveries`, {
+          shopOrder: orderId,
+          shop: selectedShopId,
+          items,
+          deliveredAt: formData.deliveredAt
+            ? new Date(formData.deliveredAt).toISOString()
+            : undefined,
+          notes: formData.notes,
+        });
 
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/deliveries`,
-        deliveryData
-      );
+        savedCount += 1;
+      }
 
       setSuccess(
-        `Delivery created successfully. Shop order is now ${response.data.shopOrderStatus}.`
+        `Delivery saved for ${shopName}: ${filledRows.length} product${
+          filledRows.length > 1 ? "s" : ""
+        } delivered.`
       );
 
       resetForm();
-
-      await Promise.all([
-        fetchDeliveries(),
-        fetchShopOrders(),
-      ]);
     } catch (err) {
-      console.error(
-        "Error creating delivery:",
-        err
-      );
+      console.error("Error creating delivery:", err);
 
       setError(
-        err.response?.data?.error ||
-          err.response?.data?.message ||
-          "Failed to create delivery."
+        (savedCount > 0
+          ? `Only part was saved (${savedCount} of ${
+              Object.keys(byOrder).length
+            } orders). Check Delivery History before trying again. `
+          : "") +
+          (err.response?.data?.error ||
+            err.response?.data?.message ||
+            "Failed to create delivery.")
       );
     } finally {
       setFormLoading(false);
+
+      await Promise.all([fetchDeliveries(), fetchShopOrders()]);
     }
   };
 
@@ -344,6 +354,17 @@ function Deliveries() {
         order.status === "pending" ||
         order.status === "partial"
     );
+
+  // Shops that still have something pending
+  const shopOptions = [];
+
+  deliverableOrders.forEach((order) => {
+    if (order.shop && !shopOptions.find((x) => x._id === order.shop._id)) {
+      shopOptions.push(order.shop);
+    }
+  });
+
+  shopOptions.sort((a, b) => a.name.localeCompare(b.name));
 
   if (loading) {
     return (
@@ -459,160 +480,110 @@ function Deliveries() {
 
             <form onSubmit={handleSubmit}>
 
-              {/* Shop Order */}
-              <div className="mb-4">
-
+              {/* Shop */}
+              <div className="mb-3">
                 <label className="form-label">
-                  Shop Order{" "}
-                  <span className="text-danger">
-                    *
-                  </span>
+                  Shop <span className="text-danger">*</span>
                 </label>
 
                 <SearchSelect
+                  value={selectedShopId}
+                  onChange={handleShopChange}
                   className="form-select"
-                  value={formData.shopOrder}
-                  onChange={
-                    handleOrderChange
-                  }
+                  required
                 >
-                  <option value="">
-                    Select Shop Order
-                  </option>
+                  <option value="">Select Shop</option>
 
-                  {deliverableOrders.map(
-                    (order) => (
-                      <option
-                        key={order._id}
-                        value={order._id}
-                      >
-                        {order.shop?.name} —{" "}
-                        {new Date(order.orderDate).toLocaleDateString("en-IN")} —{" "}
-                        {order.items
-                          .map((i) => `${i.product?.name} ${i.quantity} ${unitOf(i.product)}`)
-                          .join(", ")}{" "}
-                        — {order.status}
-                      </option>
-                    )
-                  )}
+                  {shopOptions.map((shop) => (
+                    <option key={shop._id} value={shop._id}>
+                      {shop.name} - {shop.ownerName}
+                    </option>
+                  ))}
                 </SearchSelect>
 
-                {deliverableOrders.length ===
-                  0 && (
+                {shopOptions.length === 0 && (
                   <small className="text-muted">
-                    No pending or partial shop
-                    orders available.
+                    No shop has a pending order right now.
                   </small>
                 )}
-
               </div>
 
-              {/* Selected Shop */}
-              {selectedOrder && (
+              {selectedShopId && (
                 <>
-                  <div className="alert alert-light border mb-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                    <h6 className="mb-0">
+                      Pending products of this shop
+                    </h6>
 
-                    <strong>
-                      Shop:
-                    </strong>{" "}
-                    {selectedOrder.shop?.name}
-
-                    {selectedOrder.shop
-                      ?.ownerName && (
-                      <>
-                        {" "}
-                        —{" "}
-                        {
-                          selectedOrder.shop
-                            .ownerName
-                        }
-                      </>
+                    {deliveryItems.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={fillAllRemaining}
+                      >
+                        Fill all remaining
+                      </button>
                     )}
-
                   </div>
 
-                  {/* Products */}
-                  <h6 className="mb-3">
-                    Products in this order
-                  </h6>
+                  {deliveryItems.length === 0 ? (
+                    <div className="alert alert-info">
+                      Nothing is pending for this shop.
+                    </div>
+                  ) : (
+                    <div className="table-responsive mb-3">
+                      <table className="table table-bordered align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Order date</th>
+                            <th>Product</th>
+                            <th>Ordered</th>
+                            <th>Delivered</th>
+                            <th>Remaining</th>
+                            <th>Deliver Now</th>
+                            <th>Price / unit</th>
+                          </tr>
+                        </thead>
 
-                  <div className="table-responsive mb-4">
-
-                    <table className="table table-bordered align-middle">
-
-                      <thead className="table-light">
-                        <tr>
-                          <th>Product</th>
-                          <th>Ordered</th>
-                          <th>Delivered</th>
-                          <th>Remaining</th>
-                          <th>Deliver Now</th>
-                          <th>Price / unit</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-
-                        {deliveryItems.map(
-                          (item, index) => (
-                            <tr key={item.product}>
-
-                              {/* Product */}
+                        <tbody>
+                          {deliveryItems.map((item, index) => (
+                            <tr key={`${item.orderId}-${item.product}`}>
                               <td>
-                                <strong>
-                                  {
-                                    item.productName
-                                  }
-                                </strong>
+                                {new Date(item.orderDate).toLocaleDateString(
+                                  "en-IN"
+                                )}
+                              </td>
 
+                              <td>
+                                <strong>{item.productName}</strong>
                                 <br />
-
                                 <small className="text-muted">
-                                  {
-                                    item.brand
-                                  }
+                                  {item.brand}
                                 </small>
                               </td>
 
-                              {/* Ordered */}
                               <td>
-                                {
-                                  item.orderedQuantity
-                                }{" "}
-                                {item.unit || "kg"}
+                                {item.orderedQuantity} {item.unit}
                               </td>
 
-                              {/* Already Delivered */}
                               <td>
-                                {
-                                  item.alreadyDelivered
-                                }{" "}
-                                {item.unit || "kg"}
+                                {item.alreadyDelivered} {item.unit}
                               </td>
 
-                              {/* Remaining */}
                               <td>
                                 <strong>
-                                  {
-                                    item.remainingQuantity
-                                  }{" "}
-                                  {item.unit || "kg"}
+                                  {item.remainingQuantity} {item.unit}
                                 </strong>
                               </td>
 
-                              {/* Deliver Now */}
-                              <td>
+                              <td style={{ minWidth: "110px" }}>
                                 <input
                                   type="number"
                                   className="form-control"
                                   min="0"
-                                  max={
-                                    item.remainingQuantity
-                                  }
+                                  max={item.remainingQuantity}
                                   step="0.01"
-                                  value={
-                                    item.quantityDelivered
-                                  }
+                                  value={item.quantityDelivered}
                                   onChange={(e) =>
                                     handleItemChange(
                                       index,
@@ -621,23 +592,16 @@ function Deliveries() {
                                     )
                                   }
                                   placeholder="0"
-                                  disabled={
-                                    item.remainingQuantity ===
-                                    0
-                                  }
                                 />
                               </td>
 
-                              {/* Price */}
-                              <td>
+                              <td style={{ minWidth: "100px" }}>
                                 <input
                                   type="number"
                                   className="form-control"
                                   min="0"
                                   step="0.01"
-                                  value={
-                                    item.pricePerKg
-                                  }
+                                  value={item.pricePerKg}
                                   onChange={(e) =>
                                     handleItemChange(
                                       index,
@@ -647,16 +611,12 @@ function Deliveries() {
                                   }
                                 />
                               </td>
-
                             </tr>
-                          )
-                        )}
-
-                      </tbody>
-
-                    </table>
-
-                  </div>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                   {/* Delivery Date */}
                   <div className="mb-3">
