@@ -111,6 +111,14 @@ function MainLayout() {
             Business Summary
           </NavLink>
 
+          <NavLink to="/shop-report" className={navClass}>
+            Shop Report
+          </NavLink>
+
+          <NavLink to="/distributor-report" className={navClass}>
+            Distributor Report
+          </NavLink>
+
           <NavLink to="/reports" className={navClass}>
             Reports
           </NavLink>
@@ -120,7 +128,7 @@ function MainLayout() {
       {/* Main Content */}
       <div className="flex-grow-1 app-content">
         {/* Top Header */}
-        <header className="bg-white border-bottom px-3 px-lg-4 py-3 d-flex align-items-center gap-3">
+        <header className="app-header bg-white border-bottom px-3 px-lg-4 py-3 d-flex align-items-center gap-3">
           <button
             type="button"
             className="btn btn-outline-secondary d-lg-none"
@@ -142,9 +150,37 @@ function MainLayout() {
         </header>
 
         {/* Current Page */}
-        <main className="p-3 p-lg-4">
+        <main className="p-3 p-lg-4 app-main">
           <Outlet />
         </main>
+
+        {/* Phone: fixed bottom bar for the pages used most */}
+        <nav className="app-bottom-nav d-lg-none no-print">
+          <NavLink to="/" end className="bottom-link">
+            <span>🏠</span>
+            Home
+          </NavLink>
+          <NavLink to="/shop-orders" className="bottom-link">
+            <span>📝</span>
+            Orders
+          </NavLink>
+          <NavLink to="/deliveries" className="bottom-link">
+            <span>🚚</span>
+            Deliveries
+          </NavLink>
+          <NavLink to="/payments" className="bottom-link">
+            <span>💰</span>
+            Payments
+          </NavLink>
+          <button
+            type="button"
+            className="bottom-link"
+            onClick={() => setMenuOpen(true)}
+          >
+            <span>☰</span>
+            More
+          </button>
+        </nav>
       </div>
     </div>
   );

@@ -7,6 +7,9 @@ import {
   EditModal,
   deleteEntry,
   indiaDate,
+  SearchSelect,
+  todayIndia,
+  newestFirst,
 } from "../components/EditTools";
 
 function CashTransactions() {
@@ -18,7 +21,7 @@ function CashTransactions() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [amount, setAmount] = useState("");
   const [transactionDate, setTransactionDate] = useState(
-    new Date().toISOString().split("T")[0]
+    todayIndia()
   );
   const [notes, setNotes] = useState("");
 
@@ -58,6 +61,10 @@ function CashTransactions() {
 
     if (!amount || Number(amount) <= 0) {
       setError("Please enter a valid amount.");
+      return;
+    }
+
+    if (!window.confirm("Save this entry?")) {
       return;
     }
 
@@ -189,7 +196,7 @@ function CashTransactions() {
                     Transaction Type
                   </label>
 
-                  <select
+                  <SearchSelect
                     className="form-select"
                     value={type}
                     onChange={(e) =>
@@ -203,7 +210,7 @@ function CashTransactions() {
                     <option value="personal_withdrawal">
                       Personal Withdrawal
                     </option>
-                  </select>
+                  </SearchSelect>
                 </div>
 
                 {/* Payment Method */}
@@ -212,7 +219,7 @@ function CashTransactions() {
                     Payment Method
                   </label>
 
-                  <select
+                  <SearchSelect
                     className="form-select"
                     value={paymentMethod}
                     onChange={(e) =>
@@ -221,7 +228,7 @@ function CashTransactions() {
                   >
                     <option value="cash">Cash</option>
                     <option value="gpay">GPay</option>
-                  </select>
+                  </SearchSelect>
                 </div>
 
                 {/* Amount */}
@@ -382,7 +389,7 @@ function CashTransactions() {
                     </thead>
 
                     <tbody>
-                      {transactions.map((transaction) => (
+                      {newestFirst(transactions, "transactionDate").map((transaction) => (
                         <tr key={transaction._id}>
                           <td>
                             {formatDate(

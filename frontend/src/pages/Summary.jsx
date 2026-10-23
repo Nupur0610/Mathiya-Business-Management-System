@@ -436,7 +436,7 @@ function Summary() {
                     <th>Product</th>
                     <th className="text-end">Net Sold</th>
                     <th className="text-end">Sale Value</th>
-                    <th className="text-end">Avg Buying / kg</th>
+                    <th className="text-end">Avg Buying / unit</th>
                     <th className="text-end">Buying Cost</th>
                     <th className="text-end">Profit</th>
                     <th className="text-end">Margin</th>
@@ -462,7 +462,7 @@ function Summary() {
                           </small>
                         )}
                       </td>
-                      <td className="text-end">{kg(row.netSoldKg)}</td>
+                      <td className="text-end">{`${Number(row.netSoldKg || 0).toLocaleString("en-IN")} ${row.unit || "kg"}`}</td>
                       <td className="text-end">{rupees(row.revenue)}</td>
                       <td className="text-end">
                         {row.costKnown ? (
@@ -531,8 +531,8 @@ function Summary() {
 
           <div className="alert alert-light border">
             <strong>How profit is worked out:</strong> sale value (delivered
-            minus shop returns) minus the buying cost of those kg. The
-            buying cost per kg is the average price of everything you
+            minus shop returns) minus the buying cost of those units (kg or packets). The
+            buying cost per unit is the average price of everything you
             received from distributors (after returns to them). Opening
             stock has no price saved, so it is costed at that same average.
             This is an estimate, not an accounting profit: it does not

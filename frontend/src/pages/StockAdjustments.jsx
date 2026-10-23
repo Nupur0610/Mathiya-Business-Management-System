@@ -7,6 +7,10 @@ import {
   EditModal,
   deleteEntry,
   indiaDate,
+  SearchSelect,
+  todayIndia,
+  newestFirst,
+  unitOf,
 } from "../components/EditTools";
 
 function StockAdjustments() {
@@ -20,7 +24,7 @@ function StockAdjustments() {
   const [type, setType] = useState("decrease");
   const [reason, setReason] = useState("");
   const [adjustmentDate, setAdjustmentDate] = useState(
-    new Date().toISOString().split("T")[0]
+    todayIndia()
   );
   const [notes, setNotes] = useState("");
 
@@ -75,6 +79,10 @@ function StockAdjustments() {
 
     if (!reason.trim()) {
       setError("Please enter a reason.");
+      return;
+    }
+
+    if (!window.confirm("Save this entry?")) {
       return;
     }
 
@@ -156,7 +164,7 @@ function StockAdjustments() {
                 { value: "decrease", label: "Decrease" },
               ],
             },
-            { name: "quantity", label: "Quantity (kg)", type: "number", required: true },
+            { name: "quantity", label: "Quantity", type: "number", required: true },
             { name: "adjustmentDate", label: "Date", type: "date", required: true },
             { name: "reason", label: "Reason", required: true },
             { name: "notes", label: "Notes", type: "textarea" },
@@ -207,7 +215,7 @@ function StockAdjustments() {
                     Product
                   </label>
 
-                  <select
+                  <SearchSelect
                     className="form-select"
                     value={product}
                     onChange={(e) =>
@@ -226,7 +234,7 @@ function StockAdjustments() {
                         {item.name} - {item.brand}
                       </option>
                     ))}
-                  </select>
+                  </SearchSelect>
                 </div>
 
                 <div className="mb-3">
@@ -234,7 +242,7 @@ function StockAdjustments() {
                     Adjustment Type
                   </label>
 
-                  <select
+                  <SearchSelect
                     className="form-select"
                     value={type}
                     onChange={(e) =>
@@ -248,7 +256,7 @@ function StockAdjustments() {
                     <option value="increase">
                       Increase Stock
                     </option>
-                  </select>
+                  </SearchSelect>
                 </div>
 
                 <div className="mb-3">
@@ -270,7 +278,7 @@ function StockAdjustments() {
                     />
 
                     <span className="input-group-text">
-                      kg
+                      {unitOf(products.find((p) => p._id === product))}
                     </span>
                   </div>
                 </div>
@@ -421,7 +429,7 @@ function StockAdjustments() {
                     </thead>
 
                     <tbody>
-                      {adjustments.map((item) => (
+                      {newestFirst(adjustments, "adjustmentDate").map((item) => (
                         <tr key={item._id}>
                           <td>
                             {formatDate(
@@ -454,7 +462,7 @@ function StockAdjustments() {
                           </td>
 
                           <td className="fw-semibold">
-                            {item.quantity} kg
+                            {item.quantity} {unitOf(item.product)}
                           </td>
 
                           <td>{item.reason}</td>

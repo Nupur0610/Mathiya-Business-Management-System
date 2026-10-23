@@ -20,11 +20,7 @@ const saveDailyBalance = async (req, res) => {
       });
     }
 
-    if (actualCash === undefined && actualGPay === undefined) {
-      return res.status(400).json({
-        message: "At least actualCash or actualGPay is required.",
-      });
-    }
+    // Both blank is allowed: the expected amounts are used.
 
     if (actualCash !== undefined && actualCash < 0) {
       return res.status(400).json({

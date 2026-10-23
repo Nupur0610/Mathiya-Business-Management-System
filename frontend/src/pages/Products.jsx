@@ -8,6 +8,7 @@ import {
   deleteEntry,
   SearchBox,
   matchesSearch,
+  SearchSelect,
 } from "../components/EditTools";
 
 function Products() {
@@ -204,7 +205,7 @@ function Products() {
                     Unit
                   </label>
 
-                  <select
+                  <SearchSelect
                     name="unit"
                     className="form-select"
                     value={formData.unit}
@@ -222,7 +223,7 @@ function Products() {
                       Piece
                     </option>
 
-                  </select>
+                  </SearchSelect>
 
                 </div>
 

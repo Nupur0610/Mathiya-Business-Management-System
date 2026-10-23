@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Children, useEffect, useRef, useState } from "react";
 import api from "../services/api";
 
 // Date in India time as yyyy-mm-dd (for <input type="date">)
@@ -198,7 +198,7 @@ export function EditModal({
 
     if (field.type === "select") {
       input = (
-        <select
+        <SearchSelect
           className="form-select"
           value={value}
           required={field.required}
@@ -212,7 +212,7 @@ export function EditModal({
               {option.label}
             </option>
           ))}
-        </select>
+        </SearchSelect>
       );
     } else if (field.type === "textarea") {
       input = (
@@ -280,7 +280,7 @@ export function EditModal({
                   {items.map((item, index) => (
                     <div className="row g-2 mb-2" key={index}>
                       <div className="col-12 col-md-5">
-                        <select
+                        <SearchSelect
                           className="form-select"
                           value={item.product || ""}
                           required
@@ -305,7 +305,7 @@ export function EditModal({
                                 : ""}
                             </option>
                           ))}
-                        </select>
+                        </SearchSelect>
                       </div>
 
                       <div className="col-5 col-md-3">
@@ -315,7 +315,11 @@ export function EditModal({
                           step="any"
                           min="0"
                           required
-                          placeholder={itemsConfig.qtyLabel || "Qty (kg)"}
+                          placeholder={`${(itemsConfig.qtyLabel || "Quantity").replace(/\s*\(kg\)/, "")} (${unitOf(
+                            (itemsConfig.products || []).find(
+                              (p) => p._id === item.product
+                            )
+                          )})`}
                           value={item[itemsConfig.qtyKey] ?? ""}
                           onChange={(e) =>
                             handleItemChange(
@@ -334,7 +338,11 @@ export function EditModal({
                           step="any"
                           min="0"
                           required
-                          placeholder="Price / kg"
+                          placeholder={`Price / ${unitOf(
+                            (itemsConfig.products || []).find(
+                              (p) => p._id === item.product
+                            )
+                          )}`}
                           value={item.pricePerKg ?? ""}
                           onChange={(e) =>
                             handleItemChange(
@@ -470,3 +478,242 @@ export function SearchBox({ value, onChange }) {
     </div>
   );
 }
+
+
+/* ------------------------------------------------------------------
+   Drop-in replacement for <select>.
+   Write a few letters of the name and the list is filtered
+   (letters can be anywhere in the name, capital or small).
+   Short lists (4 options or fewer) stay as a normal dropdown.
+   Usage is the same as <select>: name, value, onChange, required,
+   disabled, className and <option> children.
+------------------------------------------------------------------ */
+const textOf = (node) => {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return "";
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(textOf).join("");
+  }
+
+  if (typeof node === "object" && node.props) {
+    return textOf(node.props.children);
+  }
+
+  return String(node);
+};
+
+const collectOptions = (children, list = []) => {
+  Children.forEach(children, (child) => {
+    if (!child || typeof child !== "object" || !child.props) {
+      return;
+    }
+
+    if (child.type === "option") {
+      list.push({
+        value: String(child.props.value ?? textOf(child.props.children)),
+        label: textOf(child.props.children).replace(/\s+/g, " ").trim(),
+        disabled: !!child.props.disabled,
+      });
+    } else {
+      collectOptions(child.props.children, list);
+    }
+  });
+
+  return list;
+};
+
+// every typed word must be found in the label, or letters appear in order
+const labelMatches = (label, query) => {
+  const text = label.toLowerCase();
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+
+  if (words.every((word) => text.includes(word))) {
+    return true;
+  }
+
+  const compact = query.toLowerCase().replace(/\s+/g, "");
+  let position = 0;
+
+  for (const letter of compact) {
+    position = text.indexOf(letter, position);
+
+    if (position === -1) {
+      return false;
+    }
+
+    position += 1;
+  }
+
+  return compact.length >= 3;
+};
+
+export function SearchSelect({
+  name,
+  value,
+  onChange,
+  required,
+  disabled,
+  className,
+  children,
+}) {
+  const options = collectOptions(children);
+  const blank = options.find((option) => option.value === "");
+  const real = options.filter((option) => option.value !== "");
+
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef(null);
+
+  const selected = real.find(
+    (option) => option.value === String(value ?? "")
+  );
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.setCustomValidity(
+        required && !selected ? "Please choose from the list" : ""
+      );
+    }
+  });
+
+  const send = (newValue) => {
+    if (onChange) {
+      onChange({ target: { name, value: newValue } });
+    }
+  };
+
+  // Short lists: normal dropdown
+  if (real.length <= 4) {
+    return (
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        required={required}
+        disabled={disabled}
+        className={className}
+      >
+        {children}
+      </select>
+    );
+  }
+
+  const shown = query
+    ? real.filter((option) => labelMatches(option.label, query))
+    : real;
+
+  const choose = (option) => {
+    send(option.value);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div className="position-relative">
+      <input
+        ref={inputRef}
+        type="text"
+        className={className || "form-control"}
+        placeholder={blank?.label || "Type to search..."}
+        value={open ? query : selected ? selected.label : ""}
+        disabled={disabled}
+        autoComplete="off"
+        onFocus={(e) => {
+          setOpen(true);
+          setQuery("");
+          e.target.select();
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onBlur={() => {
+          setOpen(false);
+          setQuery("");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && open && shown.length > 0) {
+            e.preventDefault();
+            choose(shown[0]);
+          }
+
+          if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+      />
+
+      {selected && !disabled && !open && !required && (
+        <button
+          type="button"
+          className="btn btn-sm position-absolute top-50 end-0 translate-middle-y me-1 text-muted"
+          aria-label="Clear"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            send("");
+          }}
+        >
+          ✕
+        </button>
+      )}
+
+      {open && (
+        <div
+          className="list-group position-absolute w-100 shadow"
+          style={{ zIndex: 1060, maxHeight: "240px", overflowY: "auto" }}
+        >
+          {shown.length === 0 ? (
+            <div className="list-group-item text-muted">No match found</div>
+          ) : (
+            shown.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                disabled={option.disabled}
+                className={`list-group-item list-group-item-action ${
+                  selected?.value === option.value ? "active" : ""
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(option);
+                }}
+              >
+                {option.label}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Unit of a product (kg or packet)
+export const unitOf = (product) => product?.unit || "kg";
+
+// "120 kg, 40 packet" from item lines (product must be populated)
+export const qtyByUnit = (items, qtyKey = "quantity") => {
+  const totals = {};
+
+  (items || []).forEach((item) => {
+    const unit = unitOf(item.product);
+    totals[unit] = (totals[unit] || 0) + Number(item[qtyKey] || 0);
+  });
+
+  const text = Object.entries(totals)
+    .map(([unit, total]) => `${Math.round(total * 100) / 100} ${unit}`)
+    .join(", ");
+
+  return text || "0";
+};
+
+// Newest first by a date field
+export const newestFirst = (list, dateKey) =>
+  [...(list || [])].sort(
+    (a, b) => new Date(b?.[dateKey] || 0) - new Date(a?.[dateKey] || 0)
+  );
+
+// Today as yyyy-mm-dd in India time (default for date fields)
+export const todayIndia = () => indiaDate(new Date());

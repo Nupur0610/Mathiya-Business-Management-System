@@ -285,6 +285,17 @@ function Dashboard() {
 
   const LOW_STOCK_KG = 50;
 
+  // Stock total split by unit, e.g. "120 kg, 40 packet"
+  const stockByUnit = Object.entries(
+    stock.reduce((totals, item) => {
+      const unit = item.unit || "kg";
+      totals[unit] = (totals[unit] || 0) + Number(item.quantity || 0);
+      return totals;
+    }, {})
+  )
+    .map(([unit, total]) => `${total.toLocaleString("en-IN")} ${unit}`)
+    .join(", ");
+
   const lowStock = stock
     .filter((item) => Number(item.quantity || 0) < LOW_STOCK_KG)
     .sort((a, b) => a.quantity - b.quantity);
@@ -370,10 +381,7 @@ function Dashboard() {
               </h6>
 
               <h3>
-                {totalStock.toLocaleString(
-                  "en-IN"
-                )}{" "}
-                kg
+                {stockByUnit || "0 kg"}
               </h3>
 
               <p className="mb-0 text-muted">
@@ -596,7 +604,7 @@ function Dashboard() {
           <div className="card shadow-sm h-100">
             <div className="card-body">
               <h6 className="text-muted">
-                Low Stock (under {LOW_STOCK_KG} kg)
+                Low Stock (under {LOW_STOCK_KG})
               </h6>
 
               {lowStock.length === 0 ? (
@@ -618,7 +626,7 @@ function Dashboard() {
                         item.quantity <= 0 ? "text-danger" : "text-warning"
                       }
                     >
-                      {Number(item.quantity).toLocaleString("en-IN")} kg
+                      {Number(item.quantity).toLocaleString("en-IN")} {item.unit || "kg"}
                     </strong>
                   </div>
                 ))

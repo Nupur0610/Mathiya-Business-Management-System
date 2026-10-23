@@ -157,3 +157,92 @@ a {
     background: rgba(0, 0, 0, 0.45);
   }
 }
+
+
+/* Header stays at the top while scrolling (so the menu button is always reachable) */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+}
+
+/* Phones: slim fixed header, long title shortened */
+@media (max-width: 991.98px) {
+  .app-header h5 {
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-header {
+    padding-top: calc(0.5rem + env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: 0.5rem !important;
+  }
+}
+
+/* Print: hide menu and buttons, show only the report */
+@media print {
+  .app-sidebar,
+  .app-backdrop,
+  .app-header,
+  .no-print {
+    display: none !important;
+  }
+
+  .app-content {
+    width: 100% !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
+
+/* Phone bottom navigation */
+.app-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1025;
+  display: flex;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bottom-link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  text-decoration: none;
+}
+
+.bottom-link span {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bottom-link.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+@media (max-width: 991.98px) {
+  .app-main {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}

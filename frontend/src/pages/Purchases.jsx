@@ -10,6 +10,8 @@ import {
   SearchBox,
   matchesSearch,
   indiaDate,
+  SearchSelect,
+  newestFirst,
 } from "../components/EditTools";
 
 function Purchases() {
@@ -173,6 +175,10 @@ function Purchases() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!window.confirm("Save this entry?")) {
+      return;
+    }
+
     try {
       setError("");
 
@@ -247,6 +253,10 @@ function Purchases() {
     e.preventDefault();
 
     if (!selectedOrder) {
+      return;
+    }
+
+    if (!window.confirm("Save this entry?")) {
       return;
     }
 
@@ -439,7 +449,7 @@ function Purchases() {
             orderDate: indiaDate(editing.orderDate),
             notes: editing.notes || "",
           }}
-          itemsConfig={{ products, qtyKey: "quantity", qtyLabel: "Quantity (kg)" }}
+          itemsConfig={{ products, qtyKey: "quantity", qtyLabel: "Quantity" }}
           initialItems={editing.items.map((i) => ({
             product: i.product?._id || "",
             quantity: i.quantity,
@@ -463,7 +473,7 @@ function Purchases() {
             receivedAt: indiaDate(editingReceipt.receivedAt),
             notes: editingReceipt.notes || "",
           }}
-          itemsConfig={{ products, qtyKey: "quantityReceived", qtyLabel: "Received (kg)" }}
+          itemsConfig={{ products, qtyKey: "quantityReceived", qtyLabel: "Received" }}
           initialItems={editingReceipt.items.map((i) => ({
             product: i.product?._id || "",
             quantityReceived: i.quantityReceived,
@@ -505,7 +515,7 @@ function Purchases() {
                     Distributor
                   </label>
 
-                  <select
+                  <SearchSelect
                     name="distributor"
                     className="form-select"
                     value={formData.distributor}
@@ -528,7 +538,7 @@ function Purchases() {
                       )
                     )}
 
-                  </select>
+                  </SearchSelect>
 
                 </div>
 
@@ -540,7 +550,7 @@ function Purchases() {
                     Product
                   </label>
 
-                  <select
+                  <SearchSelect
                     name="product"
                     className="form-select"
                     value={formData.product}
@@ -564,7 +574,7 @@ function Purchases() {
                       )
                     )}
 
-                  </select>
+                  </SearchSelect>
 
                 </div>
 
@@ -573,7 +583,7 @@ function Purchases() {
                 <div className="col-md-4 mb-3">
 
                   <label className="form-label">
-                    Quantity (kg)
+                    Quantity ({unitOf(products.find((p) => p._id === formData.product))})
                   </label>
 
                   <input
@@ -593,7 +603,7 @@ function Purchases() {
                 <div className="col-md-4 mb-3">
 
                   <label className="form-label">
-                    Price per kg (₹)
+                    Price per {unitOf(products.find((p) => p._id === formData.product))} (₹)
                   </label>
 
                   <input
@@ -724,7 +734,7 @@ function Purchases() {
                     <input
                       type="text"
                       className="form-control"
-                      value={`${selectedOrder.items?.[0]?.quantity || 0} kg`}
+                      value={`${selectedOrder.items?.[0]?.quantity || 0} ${unitOf(selectedOrder.items?.[0]?.product)}`}
                       disabled
                     />
 
@@ -745,7 +755,7 @@ function Purchases() {
                         selectedOrder._id,
                         selectedOrder.items?.[0]
                           ?.product?._id
-                      )} kg`}
+                      )} ${unitOf(selectedOrder.items?.[0]?.product)}`}
                       disabled
                     />
 
@@ -756,7 +766,7 @@ function Purchases() {
                   <div className="col-md-4 mb-3">
 
                     <label className="form-label">
-                      Quantity Received (kg)
+                      Quantity Received ({unitOf(selectedOrder?.items?.[0]?.product)})
                     </label>
 
                     <input
@@ -780,7 +790,7 @@ function Purchases() {
                   <div className="col-md-6 mb-3">
 
                     <label className="form-label">
-                      Price per kg (₹)
+                      Price per {unitOf(selectedOrder?.items?.[0]?.product)} (₹)
                     </label>
 
                     <input
@@ -887,7 +897,7 @@ function Purchases() {
                     <th>Ordered</th>
                     <th>Received</th>
                     <th>Remaining</th>
-                    <th>Price / kg</th>
+                    <th>Price / unit</th>
                     <th>Total</th>
                     <th>Status</th>
                     <th>Action</th>
@@ -898,7 +908,7 @@ function Purchases() {
 
                 <tbody>
 
-                  {orders.filter(matchesSearch(search)).length === 0 ? (
+                  {newestFirst(orders, "orderDate").filter(matchesSearch(search)).length === 0 ? (
 
                     <tr>
 
@@ -913,7 +923,7 @@ function Purchases() {
 
                   ) : (
 
-                    orders.filter(matchesSearch(search)).map(
+                    newestFirst(orders, "orderDate").filter(matchesSearch(search)).map(
                       (order) => {
 
                         // An order can hold several products: show every one of them
@@ -978,19 +988,19 @@ function Purchases() {
 
                             <td>
   {lines.map((l, i) => (
-    <div key={i} className={i > 0 ? "mt-3" : ""}>{l.lineOrdered} kg</div>
+    <div key={i} className={i > 0 ? "mt-3" : ""}>{l.lineOrdered} {unitOf(l.line.product)}</div>
   ))}
 </td>
 
                             <td>
   {lines.map((l, i) => (
-    <div key={i} className={i > 0 ? "mt-3" : ""}><strong>{l.lineReceived} kg</strong></div>
+    <div key={i} className={i > 0 ? "mt-3" : ""}><strong>{l.lineReceived} {unitOf(l.line.product)}</strong></div>
   ))}
 </td>
 
                             <td>
   {lines.map((l, i) => (
-    <div key={i} className={i > 0 ? "mt-3" : ""}>{l.lineRemaining} kg</div>
+    <div key={i} className={i > 0 ? "mt-3" : ""}>{l.lineRemaining} {unitOf(l.line.product)}</div>
   ))}
 </td>
 
@@ -1110,7 +1120,7 @@ function Purchases() {
                   <th>Distributor</th>
                   <th>Product</th>
                   <th>Received</th>
-                  <th>Price / kg</th>
+                  <th>Price / unit</th>
                   <th>Date</th>
                   <th>Notes</th>
                 <ActionsHeader editMode={editMode} />
@@ -1120,7 +1130,7 @@ function Purchases() {
 
               <tbody>
 
-                {receipts.filter(matchesSearch(search)).length === 0 ? (
+                {newestFirst(receipts, "receivedAt").filter(matchesSearch(search)).length === 0 ? (
 
                   <tr>
 
@@ -1135,7 +1145,7 @@ function Purchases() {
 
                 ) : (
 
-                  receipts.filter(matchesSearch(search)).map(
+                  newestFirst(receipts, "receivedAt").filter(matchesSearch(search)).map(
                     (receipt) => {
 
                       const item =
@@ -1178,7 +1188,7 @@ function Purchases() {
                                 item?.quantityReceived ||
                                   0
                               }{" "}
-                              kg
+                              {unitOf(item?.product)}
                             </strong>
                           </td>
 

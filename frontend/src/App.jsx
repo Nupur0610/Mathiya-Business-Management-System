@@ -17,6 +17,8 @@ import Shops from "./pages/Shops";
 import Distributors from "./pages/Distributors";
 import Reports from "./pages/Reports";
 import Summary from "./pages/Summary";
+import ShopReport from "./pages/ShopReport";
+import DistributorReport from "./pages/DistributorReport";
 import Returns from "./pages/Returns";
 import OpeningBalances from "./pages/OpeningBalances";
 import DailyBalance from "./pages/DailyBalance";
@@ -51,6 +53,8 @@ function App() {
           <Route path="/distributors" element={<Distributors />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/summary" element={<Summary />} />
+          <Route path="/shop-report" element={<ShopReport />} />
+          <Route path="/distributor-report" element={<DistributorReport />} />
           <Route path="/returns" element={<Returns />} />
           <Route path="/opening-balances" element={<OpeningBalances />}/>
           <Route path="/daily-balance" element={<DailyBalance />}/>

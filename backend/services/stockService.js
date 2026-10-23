@@ -113,7 +113,7 @@ const assertStockNotNegative = async (productIds, session) => {
       throw new Error(
         `This change would make the stock of ${
           product ? product.name : "a product"
-        } negative (${quantity} kg). Nothing was changed.`
+        } negative (${quantity}). Nothing was changed.`
       );
     }
   }

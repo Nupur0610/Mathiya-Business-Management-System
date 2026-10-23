@@ -21,6 +21,110 @@ function getIndiaDate(date) {
   }).format(new Date(date));
 }
 
+function addDaysToKey(key, days) {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/*
+ * Opening of `date` for "cash" or "gpay".
+ * Start from the last day closed with an actual amount (or the
+ * Opening Balance entry) and carry every later day forward:
+ * actual amount if it was entered, otherwise the expected amount.
+ */
+function computeOpening(
+  type,
+  date,
+  balances,
+  payments,
+  transactions,
+  openingBalances
+) {
+  const actualField = type === "cash" ? "actualCash" : "actualGPay";
+
+  const hasActual = (balance) =>
+    balance[actualField] !== undefined && balance[actualField] !== null;
+
+  const previousDay = balances
+    .filter(
+      (balance) => getIndiaDate(balance.date) < date && hasActual(balance)
+    )
+    .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+  let amount;
+  let cursor;
+
+  if (previousDay) {
+    amount = Number(previousDay[actualField]);
+    cursor = addDaysToKey(getIndiaDate(previousDay.date), 1);
+  } else {
+    const opening = openingBalances
+      .filter(
+        (balance) =>
+          balance.type === type && getIndiaDate(balance.asOfDate) <= date
+      )
+      .sort((a, b) => new Date(b.asOfDate) - new Date(a.asOfDate))[0];
+
+    if (!opening) {
+      return 0;
+    }
+
+    amount = Number(opening.amount || 0);
+    cursor = getIndiaDate(opening.asOfDate);
+  }
+
+  const flowByDay = {};
+  const addFlow = (key, value) => {
+    flowByDay[key] = (flowByDay[key] || 0) + value;
+  };
+
+  payments.forEach((payment) => {
+    if (payment.paymentMethod !== type) return;
+    addFlow(
+      getIndiaDate(payment.paymentDate),
+      payment.partyType === "shop"
+        ? Number(payment.amount || 0)
+        : -Number(payment.amount || 0)
+    );
+  });
+
+  transactions.forEach((transaction) => {
+    if (transaction.paymentMethod !== type) return;
+    const value = Number(transaction.amount || 0);
+    addFlow(
+      getIndiaDate(transaction.transactionDate),
+      transaction.type === "personal_contribution"
+        ? value
+        : transaction.type === "personal_withdrawal"
+        ? -value
+        : 0
+    );
+  });
+
+  const actualByDay = {};
+  balances.forEach((balance) => {
+    if (hasActual(balance)) {
+      actualByDay[getIndiaDate(balance.date)] = Number(balance[actualField]);
+    }
+  });
+
+  let guard = 0;
+
+  while (cursor < date && guard < 3700) {
+    if (actualByDay[cursor] !== undefined) {
+      amount = actualByDay[cursor];
+    } else {
+      amount += flowByDay[cursor] || 0;
+    }
+
+    cursor = addDaysToKey(cursor, 1);
+    guard += 1;
+  }
+
+  return amount;
+}
+
 function formatAmount(amount) {
   return `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 }
@@ -89,67 +193,26 @@ function DailyBalance() {
       setHistory(dailyBalances);
 
       /*
-       * Find the latest completed day before the selected day.
-       * Its actual closing balance becomes today's opening balance.
+       * Opening balance = previous day's closing. A day that was
+       * not closed (or left blank) counts with its EXPECTED amount.
        */
-      const previousDays = dailyBalances
-        .filter(
-          (balance) =>
-            getIndiaDate(balance.date) < date &&
-            (balance.actualCash !== undefined ||
-              balance.actualGPay !== undefined)
-        )
-        .sort(
-          (a, b) =>
-            new Date(b.date) - new Date(a.date)
-        );
+      const calculatedOpeningCash = computeOpening(
+        "cash",
+        date,
+        dailyBalances,
+        payments,
+        cashTransactions,
+        openingBalances
+      );
 
-      const previousDay = previousDays[0];
-
-      let calculatedOpeningCash = 0;
-      let calculatedOpeningGPay = 0;
-
-      if (previousDay) {
-        calculatedOpeningCash = Number(
-          previousDay.actualCash || 0
-        );
-
-        calculatedOpeningGPay = Number(
-          previousDay.actualGPay || 0
-        );
-      } else {
-        const cashOpening = openingBalances
-          .filter(
-            (balance) =>
-              balance.type === "cash" &&
-              getIndiaDate(balance.asOfDate) <= date
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.asOfDate) -
-              new Date(a.asOfDate)
-          )[0];
-
-        const gpayOpening = openingBalances
-          .filter(
-            (balance) =>
-              balance.type === "gpay" &&
-              getIndiaDate(balance.asOfDate) <= date
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.asOfDate) -
-              new Date(a.asOfDate)
-          )[0];
-
-        calculatedOpeningCash = Number(
-          cashOpening?.amount || 0
-        );
-
-        calculatedOpeningGPay = Number(
-          gpayOpening?.amount || 0
-        );
-      }
+      const calculatedOpeningGPay = computeOpening(
+        "gpay",
+        date,
+        dailyBalances,
+        payments,
+        cashTransactions,
+        openingBalances
+      );
 
       setOpeningCash(calculatedOpeningCash);
       setOpeningGPay(calculatedOpeningGPay);
@@ -343,13 +406,6 @@ function DailyBalance() {
   const handleSave = async (e) => {
     e.preventDefault();
 
-    if (actualCash === "" && actualGPay === "") {
-      setError(
-        "Enter at least the actual cash or actual GPay balance."
-      );
-      return;
-    }
-
     if (actualCash !== "" && Number(actualCash) < 0) {
       setError("Actual cash cannot be negative.");
       return;
@@ -381,7 +437,9 @@ function DailyBalance() {
       await api.post("/daily-balances", payload);
 
       setMessage(
-        "Daily balance saved successfully. Today's actual closing balance will become the next day's opening balance."
+        actualCash === "" || actualGPay === ""
+          ? "Daily balance saved. Amounts left blank were saved as the expected amount, and will carry to the next day."
+          : "Daily balance saved successfully. Today's actual closing balance will become the next day's opening balance."
       );
 
       await loadData();
@@ -628,7 +686,8 @@ function DailyBalance() {
               <small className="text-muted">
                 Amounts are automatically filled from the expected
                 balance. Edit them only if your actual counted amount
-                is different.
+                is different. If you leave a day open or blank, the
+                expected amount is used and carried to the next day.
               </small>
             </div>
 

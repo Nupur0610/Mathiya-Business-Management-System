@@ -9,6 +9,11 @@ import {
   SearchBox,
   matchesSearch,
   indiaDate,
+  todayIndia,
+  newestFirst,
+  qtyByUnit,
+  unitOf,
+  SearchSelect,
 } from "../components/EditTools";
 
 function ShopOrders() {
@@ -30,13 +35,21 @@ function ShopOrders() {
 
   const [priceSource, setPriceSource] = useState("");
 
-  const [formData, setFormData] = useState({
-    shop: "",
+  const emptyItem = () => ({
     product: "",
     quantity: "",
     pricePerKg: "",
+    priceNote: "",
+  });
+
+  const [formData, setFormData] = useState({
+    shop: "",
+    orderDate: todayIndia(),
     notes: "",
   });
+
+  // One order can hold many products
+  const [formItems, setFormItems] = useState([emptyItem()]);
 
   // Fetch shop orders
   const fetchOrders = async () => {
@@ -150,66 +163,78 @@ function ShopOrders() {
     return latestItem || null;
   };
 
-  // Handle form input
+  // Handle shop / date / notes
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    setFormData((previous) => {
-      const updatedData = {
-        ...previous,
-        [name]: value,
-      };
+    setFormData((previous) => ({ ...previous, [name]: value }));
 
-      // When shop or product changes,
-      // find the latest ACTUAL DELIVERY price
-      if (name === "shop" || name === "product") {
-        const selectedShop =
-          name === "shop"
-            ? value
-            : previous.shop;
-
-        const selectedProduct =
-          name === "product"
-            ? value
-            : previous.product;
-
-        const latestItem =
-          findLatestDeliveredPrice(
-            selectedShop,
-            selectedProduct
-          );
-
-        if (latestItem) {
-          updatedData.pricePerKg =
-            latestItem.pricePerKg;
-
-          setPriceSource(
-            `Last delivered price: ₹${latestItem.pricePerKg}/kg`
-          );
-        } else {
-          updatedData.pricePerKg = "";
-
-          setPriceSource(
-            "No previous delivered price found."
-          );
-        }
-      }
-
-      return updatedData;
-    });
+    // Shop changed: refresh the last delivered price of every product row
+    if (name === "shop") {
+      setFormItems((previous) =>
+        previous.map((item) => applyLastPrice(value, item))
+      );
+    }
   };
+
+  // Fill price from the last delivery to this shop (if any)
+  const applyLastPrice = (shopId, item) => {
+    if (!item.product) {
+      return { ...item, priceNote: "" };
+    }
+
+    const latestItem = findLatestDeliveredPrice(shopId, item.product);
+
+    if (latestItem) {
+      return {
+        ...item,
+        pricePerKg: latestItem.pricePerKg,
+        priceNote: `Last delivered price: ₹${latestItem.pricePerKg}/kg`,
+      };
+    }
+
+    return {
+      ...item,
+      pricePerKg: "",
+      priceNote: "No previous delivered price found.",
+    };
+  };
+
+  const handleItemChange = (index, name, value) => {
+    setFormItems((previous) =>
+      previous.map((item, position) => {
+        if (position !== index) {
+          return item;
+        }
+
+        const updated = { ...item, [name]: value };
+
+        return name === "product"
+          ? applyLastPrice(formData.shop, updated)
+          : updated;
+      })
+    );
+  };
+
+  const addItemRow = () =>
+    setFormItems((previous) => [...previous, emptyItem()]);
+
+  const removeItemRow = (index) =>
+    setFormItems((previous) =>
+      previous.length === 1
+        ? previous
+        : previous.filter((_, position) => position !== index)
+    );
 
   // Reset form
   const resetForm = () => {
     setFormData({
       shop: "",
-      product: "",
-      quantity: "",
-      pricePerKg: "",
+      orderDate: todayIndia(),
       notes: "",
     });
 
-    setPriceSource("");
+    setFormItems([emptyItem()]);
     setShowForm(false);
   };
 
@@ -220,13 +245,39 @@ function ShopOrders() {
     setError("");
     setSuccess("");
 
+    if (!formData.shop) {
+      setError("Please select a shop.");
+      return;
+    }
+
+    for (const [index, item] of formItems.entries()) {
+      if (
+        !item.product ||
+        !(Number(item.quantity) > 0) ||
+        item.pricePerKg === "" ||
+        !(Number(item.pricePerKg) >= 0)
+      ) {
+        setError(
+          `Product row ${index + 1}: select the product and fill quantity and price.`
+        );
+        return;
+      }
+    }
+
+    const summary = formItems
+      .map((item) => {
+        const product = products.find((p) => p._id === item.product);
+        return `${product?.name || "Product"} - ${item.quantity} ${unitOf(product)}`;
+      })
+      .join("\n");
+
+    const shopName = shops.find((x) => x._id === formData.shop)?.name;
+
     if (
-      !formData.shop ||
-      !formData.product ||
-      !formData.quantity ||
-      !formData.pricePerKg
+      !window.confirm(
+        `Save this order for ${shopName}?\n\n${summary}\n\nDate: ${formData.orderDate}`
+      )
     ) {
-      setError("Please fill in all required fields.");
       return;
     }
 
@@ -235,13 +286,14 @@ function ShopOrders() {
 
       const orderData = {
         shop: formData.shop,
-        items: [
-          {
-            product: formData.product,
-            quantity: Number(formData.quantity),
-            pricePerKg: Number(formData.pricePerKg),
-          },
-        ],
+        items: formItems.map((item) => ({
+          product: item.product,
+          quantity: Number(item.quantity),
+          pricePerKg: Number(item.pricePerKg),
+        })),
+        orderDate: formData.orderDate
+          ? `${formData.orderDate}T12:00:00+05:30`
+          : undefined,
         notes: formData.notes,
       };
 
@@ -250,22 +302,16 @@ function ShopOrders() {
         orderData
       );
 
-      setSuccess(
-        "Shop order created successfully!"
-      );
+      setSuccess("Shop order created successfully!");
 
       resetForm();
 
       await fetchOrders();
     } catch (err) {
-      console.error(
-        "Error creating shop order:",
-        err
-      );
+      console.error("Error creating shop order:", err);
 
       setError(
-        err.response?.data?.message ||
-          "Failed to create shop order."
+        err.response?.data?.message || "Failed to create shop order."
       );
     } finally {
       setFormLoading(false);
@@ -388,111 +434,122 @@ function ShopOrders() {
                 {/* Shop */}
                 <div className="col-md-6 mb-3">
                   <label className="form-label">
-                    Shop{" "}
-                    <span className="text-danger">
-                      *
-                    </span>
+                    Shop <span className="text-danger">*</span>
                   </label>
 
-                  <select
+                  <SearchSelect
                     name="shop"
                     value={formData.shop}
                     onChange={handleChange}
                     className="form-select"
+                    required
                   >
-                    <option value="">
-                      Select Shop
-                    </option>
+                    <option value="">Select Shop</option>
 
                     {shops.map((shop) => (
-                      <option
-                        key={shop._id}
-                        value={shop._id}
-                      >
-                        {shop.name} -{" "}
-                        {shop.ownerName}
+                      <option key={shop._id} value={shop._id}>
+                        {shop.name} - {shop.ownerName}
                       </option>
                     ))}
-                  </select>
+                  </SearchSelect>
                 </div>
 
-                {/* Product */}
+                {/* Date */}
                 <div className="col-md-6 mb-3">
+                  <label className="form-label">Order date</label>
+
+                  <input
+                    type="date"
+                    name="orderDate"
+                    value={formData.orderDate}
+                    onChange={handleChange}
+                    className="form-control"
+                    required
+                  />
+                </div>
+
+                {/* Products (many rows) */}
+                <div className="col-12 mb-3">
                   <label className="form-label">
-                    Product{" "}
-                    <span className="text-danger">
-                      *
-                    </span>
+                    Products <span className="text-danger">*</span>
                   </label>
 
-                  <select
-                    name="product"
-                    value={formData.product}
-                    onChange={handleChange}
-                    className="form-select"
+                  {formItems.map((item, index) => (
+                    <div className="border rounded p-2 mb-2" key={index}>
+                      <div className="row g-2">
+                        <div className="col-12 col-md-5">
+                          <SearchSelect
+                            value={item.product}
+                            onChange={(e) =>
+                              handleItemChange(index, "product", e.target.value)
+                            }
+                            className="form-select"
+                            required
+                          >
+                            <option value="">Select Product</option>
+
+                            {products.map((product) => (
+                              <option key={product._id} value={product._id}>
+                                {product.name} - {product.brand}
+                              </option>
+                            ))}
+                          </SearchSelect>
+                        </div>
+
+                        <div className="col-6 col-md-3">
+                          <input
+                            type="number"
+                            className="form-control"
+                            min="0.01"
+                            step="0.01"
+                            placeholder={`Quantity (${unitOf(products.find((p) => p._id === item.product))})`}
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleItemChange(index, "quantity", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        <div className="col-6 col-md-3">
+                          <input
+                            type="number"
+                            className="form-control"
+                            min="0"
+                            step="0.01"
+                            placeholder={`Price per ${unitOf(products.find((p) => p._id === item.product))} (₹)`}
+                            value={item.pricePerKg}
+                            onChange={(e) =>
+                              handleItemChange(index, "pricePerKg", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-1 d-grid">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger"
+                            onClick={() => removeItemRow(index)}
+                            disabled={formItems.length === 1}
+                            aria-label="Remove product"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+
+                      {item.priceNote && (
+                        <small className="text-muted">{item.priceNote}</small>
+                      )}
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={addItemRow}
                   >
-                    <option value="">
-                      Select Product
-                    </option>
-
-                    {products.map((product) => (
-                      <option
-                        key={product._id}
-                        value={product._id}
-                      >
-                        {product.name} -{" "}
-                        {product.brand}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Quantity */}
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">
-                    Quantity (kg){" "}
-                    <span className="text-danger">
-                      *
-                    </span>
-                  </label>
-
-                  <input
-                    type="number"
-                    name="quantity"
-                    value={formData.quantity}
-                    onChange={handleChange}
-                    className="form-control"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="Enter quantity"
-                  />
-                </div>
-
-                {/* Price */}
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">
-                    Price per kg (₹){" "}
-                    <span className="text-danger">
-                      *
-                    </span>
-                  </label>
-
-                  <input
-                    type="number"
-                    name="pricePerKg"
-                    value={formData.pricePerKg}
-                    onChange={handleChange}
-                    className="form-control"
-                    min="0"
-                    step="0.01"
-                    placeholder="Enter price per kg"
-                  />
-
-                  {priceSource && (
-                    <small className="text-muted">
-                      {priceSource}
-                    </small>
-                  )}
+                    + Add another product
+                  </button>
                 </div>
 
                 {/* Notes */}
@@ -568,14 +625,7 @@ function ShopOrders() {
                 </thead>
 
                 <tbody>
-                  {orders.filter(matchesSearch(search)).map((order) => {
-                    const totalQuantity =
-                      order.items.reduce(
-                        (total, item) =>
-                          total + item.quantity,
-                        0
-                      );
-
+                  {newestFirst(orders, "orderDate").filter(matchesSearch(search)).map((order) => {
                     const totalAmount =
                       calculateTotal(
                         order.items
@@ -616,7 +666,7 @@ function ShopOrders() {
                         </td>
 
                         <td>
-                          {totalQuantity} kg
+                          {qtyByUnit(order.items, "quantity")}
                         </td>
 
                         <td>

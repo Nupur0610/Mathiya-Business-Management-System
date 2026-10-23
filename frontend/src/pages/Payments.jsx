@@ -10,6 +10,9 @@ import {
   SearchBox,
   matchesSearch,
   indiaDate,
+  SearchSelect,
+  todayIndia,
+  newestFirst,
 } from "../components/EditTools";
 
 function Payments() {
@@ -17,7 +20,7 @@ function Payments() {
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const getToday = () => {
-    return new Date().toISOString().split("T")[0];
+    return todayIndia();
   };
 
   const [payments, setPayments] = useState([]);
@@ -278,6 +281,10 @@ function Payments() {
       return;
     }
 
+    if (!window.confirm("Save this entry?")) {
+      return;
+    }
+
     try {
       setFormLoading(true);
 
@@ -511,7 +518,7 @@ function Payments() {
                   </span>
                 </label>
 
-                <select
+                <SearchSelect
                   name="party"
                   value={formData.party}
                   onChange={handleChange}
@@ -535,7 +542,7 @@ function Payments() {
                     </option>
                   ))}
 
-                </select>
+                </SearchSelect>
 
               </div>
 
@@ -575,7 +582,7 @@ function Payments() {
                   </span>
                 </label>
 
-                <select
+                <SearchSelect
                   name="paymentMethod"
                   value={formData.paymentMethod}
                   onChange={handleChange}
@@ -591,7 +598,7 @@ function Payments() {
                     GPay
                   </option>
 
-                </select>
+                </SearchSelect>
 
               </div>
 
@@ -787,7 +794,7 @@ function Payments() {
 
               <tbody>
 
-                {paymentList.filter(matchesSearch(search)).map((payment) => (
+                {newestFirst(paymentList, "paymentDate").filter(matchesSearch(search)).map((payment) => (
 
                   <tr key={payment._id}>
 

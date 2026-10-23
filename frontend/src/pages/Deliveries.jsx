@@ -9,7 +9,18 @@ import {
   SearchBox,
   matchesSearch,
   indiaDate,
+  newestFirst,
+  unitOf,
+  SearchSelect,
 } from "../components/EditTools";
+
+// Current date and time for <input type="datetime-local"> (device time)
+const nowLocalInput = () => {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+};
 
 function Deliveries() {
   const [editMode, setEditMode] = useState(false);
@@ -31,7 +42,7 @@ function Deliveries() {
 
   const [formData, setFormData] = useState({
     shopOrder: "",
-    deliveredAt: new Date().toISOString().slice(0, 16),
+    deliveredAt: nowLocalInput(),
     notes: "",
   });
 
@@ -164,6 +175,7 @@ function Deliveries() {
         product: item.product._id,
         productName: item.product.name,
         brand: item.product.brand,
+        unit: unitOf(item.product),
         orderedQuantity: item.quantity,
         alreadyDelivered,
         remainingQuantity:
@@ -202,10 +214,7 @@ function Deliveries() {
   const resetForm = () => {
     setFormData({
       shopOrder: "",
-      deliveredAt:
-        new Date()
-          .toISOString()
-          .slice(0, 16),
+      deliveredAt: nowLocalInput(),
       notes: "",
     });
 
@@ -261,7 +270,7 @@ function Deliveries() {
 
       if (quantity > item.remainingQuantity) {
         setError(
-          `${item.productName} (${item.brand}): maximum remaining quantity is ${item.remainingQuantity} kg.`
+          `${item.productName} (${item.brand}): maximum remaining quantity is ${item.remainingQuantity} ${item.unit || "kg"}.`
         );
         return;
       }
@@ -272,6 +281,10 @@ function Deliveries() {
         );
         return;
       }
+    }
+
+    if (!window.confirm("Save this entry?")) {
+      return;
     }
 
     try {
@@ -323,8 +336,10 @@ function Deliveries() {
   // -----------------------------------------
   // Only orders that can still be delivered
   // -----------------------------------------
-  const deliverableOrders =
-    shopOrders.filter(
+  const deliverableOrders = newestFirst(
+    shopOrders,
+    "orderDate"
+  ).filter(
       (order) =>
         order.status === "pending" ||
         order.status === "partial"
@@ -404,7 +419,7 @@ function Deliveries() {
               );
             })(),
             qtyKey: "quantityDelivered",
-            qtyLabel: "Delivered (kg)",
+            qtyLabel: "Delivered",
           }}
           initialItems={editing.items.map((i) => ({
             product: i.product?._id || "",
@@ -454,7 +469,7 @@ function Deliveries() {
                   </span>
                 </label>
 
-                <select
+                <SearchSelect
                   className="form-select"
                   value={formData.shopOrder}
                   onChange={
@@ -472,12 +487,15 @@ function Deliveries() {
                         value={order._id}
                       >
                         {order.shop?.name} —{" "}
-                        {order._id.slice(-6)} —{" "}
-                        {order.status}
+                        {new Date(order.orderDate).toLocaleDateString("en-IN")} —{" "}
+                        {order.items
+                          .map((i) => `${i.product?.name} ${i.quantity} ${unitOf(i.product)}`)
+                          .join(", ")}{" "}
+                        — {order.status}
                       </option>
                     )
                   )}
-                </select>
+                </SearchSelect>
 
                 {deliverableOrders.length ===
                   0 && (
@@ -529,7 +547,7 @@ function Deliveries() {
                           <th>Delivered</th>
                           <th>Remaining</th>
                           <th>Deliver Now</th>
-                          <th>Price / kg</th>
+                          <th>Price / unit</th>
                         </tr>
                       </thead>
 
@@ -561,7 +579,7 @@ function Deliveries() {
                                 {
                                   item.orderedQuantity
                                 }{" "}
-                                kg
+                                {item.unit || "kg"}
                               </td>
 
                               {/* Already Delivered */}
@@ -569,7 +587,7 @@ function Deliveries() {
                                 {
                                   item.alreadyDelivered
                                 }{" "}
-                                kg
+                                {item.unit || "kg"}
                               </td>
 
                               {/* Remaining */}
@@ -578,7 +596,7 @@ function Deliveries() {
                                   {
                                     item.remainingQuantity
                                   }{" "}
-                                  kg
+                                  {item.unit || "kg"}
                                 </strong>
                               </td>
 
@@ -747,7 +765,7 @@ function Deliveries() {
                     <th>Order</th>
                     <th>Products</th>
                     <th>Delivered</th>
-                    <th>Price / kg</th>
+                    <th>Price / unit</th>
                     <th>Delivered At</th>
                     <th>Notes</th>
                   <ActionsHeader editMode={editMode} />
@@ -756,7 +774,7 @@ function Deliveries() {
 
                 <tbody>
 
-                  {deliveries.filter(matchesSearch(search)).map(
+                  {newestFirst(deliveries, "deliveredAt").filter(matchesSearch(search)).map(
                     (delivery) => (
                       <tr
                         key={delivery._id}
@@ -834,7 +852,7 @@ function Deliveries() {
                                 {
                                   item.quantityDelivered
                                 }{" "}
-                                kg
+                                {unitOf(item.product)}
                               </div>
                             )
                           )}

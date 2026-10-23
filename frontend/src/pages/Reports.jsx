@@ -126,6 +126,14 @@ function Reports() {
     return Number(quantity || 0).toLocaleString("en-IN");
   };
 
+  // Totals over all products: one unit if every product uses it, else "units"
+  const productUnits = [
+    ...new Set(
+      (stockReport?.byProduct || []).map((row) => row.unit || "kg")
+    ),
+  ];
+  const summaryUnit = productUnits.length === 1 ? productUnits[0] : productUnits.length === 0 ? "kg" : "units (kg + packets)";
+
   const getProfitLossClass = (value) => {
     if (Number(value || 0) > 0) {
       return "text-success";
@@ -637,7 +645,7 @@ function Reports() {
                     {formatQuantity(
                       stockReport.summary.purchaseQuantity
                     )}{" "}
-                    kg
+                    {summaryUnit}
                   </h4>
                 </div>
               </div>
@@ -657,7 +665,7 @@ function Reports() {
                       stockReport.summary.soldQuantity ??
                         stockReport.summary.salesQuantity
                     )}{" "}
-                    kg
+                    {summaryUnit}
                   </h4>
                 </div>
               </div>
@@ -676,7 +684,7 @@ function Reports() {
                     {formatQuantity(
                       stockReport.summary.currentStock
                     )}{" "}
-                    kg
+                    {summaryUnit}
                   </h4>
                 </div>
               </div>
@@ -695,7 +703,7 @@ function Reports() {
                     {formatQuantity(
                       stockReport.summary.netMovement
                     )}{" "}
-                    kg
+                    {summaryUnit}
                   </h4>
                 </div>
               </div>
@@ -780,14 +788,14 @@ function Reports() {
                                   {formatQuantity(
                                     item.purchaseQuantity
                                   )}{" "}
-                                  kg
+                                  {item.unit || "kg"}
                                 </td>
 
                                 <td>
                                   {formatQuantity(
                                     item.salesQuantity
                                   )}{" "}
-                                  kg
+                                  {item.unit || "kg"}
                                 </td>
 
                                 <td>
@@ -797,7 +805,7 @@ function Reports() {
                                   {formatQuantity(
                                     totalReturns
                                   )}{" "}
-                                  kg
+                                  {item.unit || "kg"}
                                 </td>
 
                                 <td>
@@ -807,21 +815,21 @@ function Reports() {
                                   {formatQuantity(
                                     adjustments
                                   )}{" "}
-                                  kg
+                                  {item.unit || "kg"}
                                 </td>
 
                                 <td className="fw-semibold">
                                   {formatQuantity(
                                     item.netMovement
                                   )}{" "}
-                                  kg
+                                  {item.unit || "kg"}
                                 </td>
 
                                 <td className="fw-bold">
                                   {formatQuantity(
                                     item.currentStock
                                   )}{" "}
-                                  kg
+                                  {item.unit || "kg"}
                                 </td>
                               </tr>
                             );
@@ -907,28 +915,28 @@ function Reports() {
                                 {formatQuantity(
                                   day.purchaseQuantity
                                 )}{" "}
-                                kg
+                                {summaryUnit}
                               </td>
 
                               <td className="text-end">
                                 {formatQuantity(
                                   day.salesQuantity
                                 )}{" "}
-                                kg
+                                {summaryUnit}
                               </td>
 
                               <td className="text-end">
                                 {formatQuantity(
                                   day.salesReturnQuantity
                                 )}{" "}
-                                kg
+                                {summaryUnit}
                               </td>
 
                               <td className="text-end">
                                 {formatQuantity(
                                   day.purchaseReturnQuantity
                                 )}{" "}
-                                kg
+                                {summaryUnit}
                               </td>
 
                               <td className="text-end">
@@ -938,7 +946,7 @@ function Reports() {
                                 {formatQuantity(
                                   adjustments
                                 )}{" "}
-                                kg
+                                {summaryUnit}
                               </td>
 
                               <td
@@ -958,7 +966,7 @@ function Reports() {
                                 {formatQuantity(
                                   day.netMovement
                                 )}{" "}
-                                kg
+                                {summaryUnit}
                               </td>
                             </tr>
                           );

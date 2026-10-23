@@ -9,6 +9,9 @@ import {
   SearchBox,
   matchesSearch,
   indiaDate,
+  SearchSelect,
+  todayIndia,
+  newestFirst,
 } from "../components/EditTools";
 
 function Returns() {
@@ -37,7 +40,7 @@ function Returns() {
     product: "",
     quantity: "",
     pricePerKg: "",
-    returnDate: new Date().toISOString().split("T")[0],
+    returnDate: todayIndia(),
     reason: "",
     notes: "",
   });
@@ -312,6 +315,10 @@ function Returns() {
       return;
     }
 
+    if (!window.confirm("Save this entry?")) {
+      return;
+    }
+
     try {
       setFormLoading(true);
 
@@ -540,7 +547,7 @@ function Returns() {
                     </span>
                   </label>
 
-                  <select
+                  <SearchSelect
                     name="party"
                     value={formData.party}
                     onChange={handleChange}
@@ -561,7 +568,7 @@ function Returns() {
                         {party.name}
                       </option>
                     ))}
-                  </select>
+                  </SearchSelect>
                 </div>
 
                 <div className="col-md-6 mb-3">
@@ -572,7 +579,7 @@ function Returns() {
                     </span>
                   </label>
 
-                  <select
+                  <SearchSelect
                     name="product"
                     value={formData.product}
                     onChange={handleChange}
@@ -591,12 +598,12 @@ function Returns() {
                         {product.brand}
                       </option>
                     ))}
-                  </select>
+                  </SearchSelect>
                 </div>
 
                 <div className="col-md-6 mb-3">
                   <label className="form-label">
-                    Quantity (kg){" "}
+                    Quantity ({unitOf(products.find((p) => p._id === formData.product))}){" "}
                     <span className="text-danger">
                       *
                     </span>
@@ -616,7 +623,7 @@ function Returns() {
 
                 <div className="col-md-6 mb-3">
                   <label className="form-label">
-                    Price per kg (₹){" "}
+                    Price per {unitOf(products.find((p) => p._id === formData.product))} (₹){" "}
                     <span className="text-danger">
                       *
                     </span>
@@ -728,14 +735,7 @@ function Returns() {
                 </thead>
 
                 <tbody>
-                  {returns.filter(matchesSearch(search)).map((returnItem) => {
-                    const totalQuantity =
-                      returnItem.items.reduce(
-                        (total, item) =>
-                          total + item.quantity,
-                        0
-                      );
-
+                  {newestFirst(returns, "returnDate").filter(matchesSearch(search)).map((returnItem) => {
                     const totalAmount =
                       calculateTotal(
                         returnItem.items
@@ -786,7 +786,7 @@ function Returns() {
                         </td>
 
                         <td>
-                          {totalQuantity} kg
+                          {qtyByUnit(returnItem.items, "quantity")}
                         </td>
 
                         <td>

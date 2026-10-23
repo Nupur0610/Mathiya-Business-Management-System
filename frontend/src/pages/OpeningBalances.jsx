@@ -7,6 +7,8 @@ import {
   EditModal,
   deleteEntry,
   indiaDate,
+  SearchSelect,
+  newestFirst,
 } from "../components/EditTools";
 
 function getTodayDate() {
@@ -105,6 +107,10 @@ function OpeningBalances() {
     setLoading(true);
     setMessage("");
     setError("");
+
+    if (!window.confirm("Save this entry?")) {
+      return;
+    }
 
     try {
       const payload = {
@@ -248,12 +254,17 @@ function OpeningBalances() {
       0
     );
 
-  const totalOpeningStock = balances
-    .filter((balance) => balance.type === "stock")
-    .reduce(
-      (total, balance) => total + Number(balance.quantity || 0),
-      0
-    );
+  const totalOpeningStock = Object.entries(
+    balances
+      .filter((balance) => balance.type === "stock")
+      .reduce((totals, balance) => {
+        const unit = balance.product?.unit || "kg";
+        totals[unit] = (totals[unit] || 0) + Number(balance.quantity || 0);
+        return totals;
+      }, {})
+  )
+    .map(([unit, total]) => `${total.toLocaleString("en-IN")} ${unit}`)
+    .join(", ") || "0 kg";
 
   if (pageLoading) {
     return (
@@ -384,7 +395,7 @@ function OpeningBalances() {
 
           <div className="text-end">
             <h3 className="mb-0">
-              {totalOpeningStock.toLocaleString("en-IN")} kg
+              {totalOpeningStock}
             </h3>
             <small className="text-muted">
               Across {balances.filter(
@@ -448,7 +459,7 @@ function OpeningBalances() {
             },
             {
               name: "quantity",
-              label: "Quantity (kg)",
+              label: "Quantity",
               type: "number",
               required: true,
               showIf: (v) => v.type === "stock",
@@ -518,7 +529,7 @@ function OpeningBalances() {
                   Balance Type
                 </label>
 
-                <select
+                <SearchSelect
                   className="form-select"
                   name="type"
                   value={form.type}
@@ -534,7 +545,7 @@ function OpeningBalances() {
                   <option value="distributor_payable">
                     Distributor Payable
                   </option>
-                </select>
+                </SearchSelect>
               </div>
 
               {/* Date */}
@@ -586,7 +597,7 @@ function OpeningBalances() {
                       Product
                     </label>
 
-                    <select
+                    <SearchSelect
                       className="form-select"
                       name="product"
                       value={form.product}
@@ -608,7 +619,7 @@ function OpeningBalances() {
                             : ""}
                         </option>
                       ))}
-                    </select>
+                    </SearchSelect>
                   </div>
 
                   <div className="col-md-6">
@@ -630,7 +641,7 @@ function OpeningBalances() {
                       />
 
                       <span className="input-group-text">
-                        kg
+                        {(products.find((p) => p._id === form.product)?.unit) || "kg"}
                       </span>
                     </div>
                   </div>
@@ -644,7 +655,7 @@ function OpeningBalances() {
                     Shop
                   </label>
 
-                  <select
+                  <SearchSelect
                     className="form-select"
                     name="shop"
                     value={form.shop}
@@ -660,7 +671,7 @@ function OpeningBalances() {
                         {shop.name}
                       </option>
                     ))}
-                  </select>
+                  </SearchSelect>
                 </div>
               )}
 
@@ -671,7 +682,7 @@ function OpeningBalances() {
                     Distributor
                   </label>
 
-                  <select
+                  <SearchSelect
                     className="form-select"
                     name="distributor"
                     value={form.distributor}
@@ -690,7 +701,7 @@ function OpeningBalances() {
                         {distributor.name}
                       </option>
                     ))}
-                  </select>
+                  </SearchSelect>
                 </div>
               )}
 
@@ -772,7 +783,7 @@ function OpeningBalances() {
                     </td>
                   </tr>
                 ) : (
-                  balances.map((balance) => (
+                  newestFirst(balances, "asOfDate").map((balance) => (
                     <tr key={balance._id}>
                       <td>
                         {formatDate(balance.asOfDate)}
